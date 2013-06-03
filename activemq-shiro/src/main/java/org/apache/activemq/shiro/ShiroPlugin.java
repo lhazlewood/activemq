@@ -157,12 +157,11 @@ public class ShiroPlugin extends BrokerPluginSupport {
         }
 
         //this.environment is null - set it:
-        final SecurityManager securityManager = this.securityManager;
-        if (securityManager != null) {
+        if (this.securityManager != null) {
             this.environment = new Environment() {
                 @Override
                 public SecurityManager getSecurityManager() {
-                    return securityManager;
+                    return ShiroPlugin.this.securityManager;
                 }
             };
             return this.environment;
