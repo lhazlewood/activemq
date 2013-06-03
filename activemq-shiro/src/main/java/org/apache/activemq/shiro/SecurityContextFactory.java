@@ -23,8 +23,8 @@ import org.apache.shiro.subject.Subject;
  * A {@code SecurityContextFactory} returns a {@link SecurityContext} instance that retains a client
  * connection's {@link Subject} instance.
  * <p/>
- * It should be noted that at the time a {@code SecurityContextFactory} is invoked, the {@code Subject} argument
- * already reflects the client connection.  A {@code SecurityContextFactory} is merely responsible for creating
+ * It should be noted that at the time a {@code SecurityContextFactory} is invoked, a {@link Subject} is already
+ * associated with the client connection.  A {@code SecurityContextFactory} is merely responsible for creating
  * a Shiro-specific {@link org.apache.activemq.security.SecurityContext SecurityContext} instance.
  * <p/>
  * The returned {@code SecurityContext} instance will then be made available to any downstream Broker Filters via
@@ -39,8 +39,8 @@ public interface SecurityContextFactory {
     /**
      * Creates a new {@link SecurityContext} retaining the client connection's {@link Subject} instance.
      * <p/>
-     * It should be noted that at the time a {@code SecurityContextFactory} is invoked, the {@code Subject} argument
-     * already reflects the client connection.  A {@code SecurityContextFactory} is merely responsible for creating
+     * It should be noted that at the time a {@code SecurityContextFactory} is invoked, a {@code Subject} is already
+     * associated with the client connection.  A {@code SecurityContextFactory} is merely responsible for creating
      * a Shiro-specific {@link org.apache.activemq.security.SecurityContext SecurityContext} instance.
      * <p/>
      * The returned {@code SecurityContext} instance will then be made available to any downstream Broker Filters via
