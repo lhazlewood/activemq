@@ -19,6 +19,13 @@ package org.apache.activemq.shiro;
 import org.apache.shiro.subject.Subject;
 
 /**
+ * An {@code AuthenticationPolicy} customizes the behavior of the {@link AuthenticationFilter}, such as whether or not
+ * authentication is required or how to represent trusted/known {@code Subject} identities.
+ * <p/>
+ * Most will find customizing properties on the {@link DefaultAuthenticationPolicy} easier than implementing this
+ * interface directly.
+ *
+ * @see DefaultAuthenticationPolicy
  * @since 5.9.0
  */
 public interface AuthenticationPolicy {
@@ -28,8 +35,8 @@ public interface AuthenticationPolicy {
      * connection.  This allows for any pre-existing connection-specific identity or state to be applied to the
      * {@link Subject.Builder} before the {@code Subject} instance is actually created.
      * <p/>
-     * <b>NOTE:</b> This method is called by the {@link SubjectFilter SubjectFilter} <em>before</em> being sent
-     * down the broker filter chain (and before an authentication attempt occurs).  Implementations <em>SHOULD NOT</em>
+     * <b>NOTE:</b> This method is called by the {@link SubjectFilter SubjectFilter} <em>before</em> the filter chain
+     * is executed (and before an authentication attempt occurs).  Implementations <b><em>MUST NOT</em></b>
      * attempt to actually {@link org.apache.shiro.subject.Subject.Builder#buildSubject() build} the subject or perform
      * an authentication attempt in this method.
      *

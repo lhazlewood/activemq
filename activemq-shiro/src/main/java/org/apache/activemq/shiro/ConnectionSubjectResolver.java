@@ -16,6 +16,7 @@
  */
 package org.apache.activemq.shiro;
 
+import org.apache.activemq.broker.ConnectionContext;
 import org.apache.activemq.security.SecurityContext;
 import org.apache.shiro.subject.Subject;
 
@@ -28,11 +29,11 @@ public class ConnectionSubjectResolver implements SubjectResolver {
 
     private final SubjectSecurityContext securityContext;
 
-    public ConnectionSubjectResolver(ConnectionReference conn) {
-        if (conn == null) {
-            throw new IllegalArgumentException("ConnectionReference argument cannot be null.");
+    public ConnectionSubjectResolver(ConnectionContext connCtx) {
+        if (connCtx == null) {
+            throw new IllegalArgumentException("ConnectionContext argument cannot be null.");
         }
-        SecurityContext secCtx = conn.getConnectionContext().getSecurityContext();
+        SecurityContext secCtx = connCtx.getSecurityContext();
         if (secCtx == null) {
             String msg = "There is no SecurityContext available on the ConnectionContext.  It " +
                     "is expected that a previous broker in the chain will create the SecurityContext prior to this " +
@@ -46,6 +47,10 @@ public class ConnectionSubjectResolver implements SubjectResolver {
             throw new IllegalArgumentException(msg);
         }
         this.securityContext = (SubjectSecurityContext) secCtx;
+    }
+
+    public ConnectionSubjectResolver(ConnectionReference conn) {
+        this(conn.getConnectionContext());
     }
 
     @Override

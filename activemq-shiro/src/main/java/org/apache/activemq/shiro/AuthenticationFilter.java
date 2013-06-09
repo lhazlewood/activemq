@@ -16,18 +16,33 @@
  */
 package org.apache.activemq.shiro;
 
-import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.ConnectionContext;
 import org.apache.activemq.command.ConnectionInfo;
 import org.apache.activemq.security.SecurityContext;
 import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authc.AuthenticationToken;
-import org.apache.shiro.env.Environment;
 import org.apache.shiro.subject.Subject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * The {@code AuthenticationFilter} enforces if authentication is required before allowing the broker filter chain
+ * to continue.
+ * <p/>
+ * This implementation performs a connection-level authentication assertion:  If the {@link Subject} associated with the
+ * connection<b>*</b> is not authenticated, and the
+ * {@link AuthenticationPolicy AuthenticationPolicy} requires the {@code Subject} to be authenticated, it will attempt
+ * to {@link Subject#login(org.apache.shiro.authc.AuthenticationToken) login} the Subject automatically.  The
+ * {@link AuthenticationToken} used to login is created by the
+ * {@link #getAuthenticationTokenFactory() authenticationTokenFactory}, typically by acquiring any credentials
+ * associated with the connection.
+ * <p/>
+ * Once the connection's {@code Subject} is authenticated as necessary, the broker filter chain will continue
+ * as expected.
+ * <p/>
+ * <b>*</b>: The upstream {@link SubjectFilter} is expected to execute before this one, ensuring a Subject instance
+ * is already associated with the connection.
+ *
  * @since 5.9.0
  */
 public class AuthenticationFilter extends EnvironmentFilter {
@@ -108,7 +123,7 @@ public class AuthenticationFilter extends EnvironmentFilter {
                         String msg = "Unable to cleanly logout connection Subject during connection removal.  This is " +
                                 "unexpected but not critical: it can be safely ignored because the " +
                                 "connection will no longer be used.";
-                        LOG.warn(msg, t);
+                        LOG.info(msg, t);
                     }
                 }
             }

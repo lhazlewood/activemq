@@ -73,6 +73,12 @@
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>activemq-unit-tests</artifactId>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <!-- <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>activemq-jaas</artifactId>

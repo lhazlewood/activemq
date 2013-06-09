@@ -38,15 +38,15 @@ public class ShiroPlugin extends BrokerPluginSupport {
     private Environment environment;
     private SecurityManager securityManager;
 
-    //Subject Filter and its components:
     private SubjectFilter subjectFilter;
 
-    //AuthenticationFilter and its components:
     private AuthenticationFilter authenticationFilter;
-    private volatile boolean authenticationEnabled;
+
+    private AuthorizationFilter authorizationFilter;
 
     public ShiroPlugin() {
-        authenticationEnabled = true;
+
+        authorizationFilter = new AuthorizationFilter();
 
         // we want to share one AuthenticationPolicy instance across both the AuthenticationFilter and the
         // ConnectionSubjectFactory:
@@ -54,12 +54,13 @@ public class ShiroPlugin extends BrokerPluginSupport {
 
         authenticationFilter = new AuthenticationFilter();
         authenticationFilter.setAuthenticationPolicy(authcPolicy);
+        authenticationFilter.setNext(authorizationFilter);
 
         subjectFilter = new SubjectFilter();
-        subjectFilter.setNext(authenticationFilter);
         DefaultConnectionSubjectFactory subjectFactory = new DefaultConnectionSubjectFactory();
         subjectFactory.setAuthenticationPolicy(authcPolicy);
         subjectFilter.setConnectionSubjectFactory(subjectFactory);
+        subjectFilter.setNext(authenticationFilter);
     }
 
     public SubjectFilter getSubjectFilter() {
@@ -77,7 +78,18 @@ public class ShiroPlugin extends BrokerPluginSupport {
 
     public void setAuthenticationFilter(AuthenticationFilter authenticationFilter) {
         this.authenticationFilter = authenticationFilter;
+        this.authenticationFilter.setNext(this.authorizationFilter);
         this.subjectFilter.setNext(authenticationFilter);
+    }
+
+    public AuthorizationFilter getAuthorizationFilter() {
+        return authorizationFilter;
+    }
+
+    public void setAuthorizationFilter(AuthorizationFilter authorizationFilter) {
+        this.authorizationFilter = authorizationFilter;
+        this.authorizationFilter.setNext(this.broker);
+        this.authenticationFilter.setNext(authorizationFilter);
     }
 
     public void setEnabled(boolean enabled) {
@@ -125,17 +137,11 @@ public class ShiroPlugin extends BrokerPluginSupport {
     // Authentication Configuration
     // ===============================================================
     public void setAuthenticationEnabled(boolean authenticationEnabled) {
-        this.authenticationEnabled = authenticationEnabled;
-        if (isInstalled()) {
-            this.authenticationFilter.setEnabled(authenticationEnabled);
-        }
+        this.authenticationFilter.setEnabled(authenticationEnabled);
     }
 
     public boolean isAuthenticationEnabled() {
-        if (isInstalled()) {
-            return this.authenticationFilter.isEnabled();
-        }
-        return authenticationEnabled;
+        return this.authenticationFilter.isEnabled();
     }
 
     public AuthenticationPolicy getAuthenticationPolicy() {
@@ -149,6 +155,17 @@ public class ShiroPlugin extends BrokerPluginSupport {
         if (factory instanceof DefaultConnectionSubjectFactory) {
             ((DefaultConnectionSubjectFactory) factory).setAuthenticationPolicy(authenticationPolicy);
         }
+    }
+
+    // ===============================================================
+    // Authorization Configuration
+    // ===============================================================
+    public void setAuthorizationEnabled(boolean authorizationEnabled) {
+        this.authorizationFilter.setEnabled(authorizationEnabled);
+    }
+
+    public boolean isAuthorizationEnabled() {
+        return this.authorizationFilter.isEnabled();
     }
 
     private Environment ensureEnvironment() throws ConfigurationException {
@@ -174,16 +191,17 @@ public class ShiroPlugin extends BrokerPluginSupport {
 
     @Override
     public Broker installPlugin(Broker broker) throws Exception {
-        this.broker = broker;
-        this.authenticationFilter.setNext(broker);
 
-        long start = System.nanoTime();
         Environment environment = ensureEnvironment();
-        long end = System.nanoTime();
-        LOG.info("Shiro Environment initialized in " + ((end - start) / 1000) + " milliseconds");
 
+        this.authorizationFilter.setEnvironment(environment);
         this.authenticationFilter.setEnvironment(environment);
         this.subjectFilter.setEnvironment(environment);
+
+        this.broker = broker;
+        this.authorizationFilter.setNext(broker);
+        this.authenticationFilter.setNext(this.authorizationFilter);
+        this.subjectFilter.setNext(this.authenticationFilter);
 
         Broker next = this.subjectFilter;
         if (!this.enabled) {

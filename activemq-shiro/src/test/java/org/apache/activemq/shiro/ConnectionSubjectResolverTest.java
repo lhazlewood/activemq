@@ -33,7 +33,7 @@ public class ConnectionSubjectResolverTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testNullConstructorArg() {
-        new ConnectionSubjectResolver(null);
+        new ConnectionSubjectResolver((ConnectionContext)null);
     }
 
     @Test(expected = IllegalArgumentException.class)
