@@ -108,32 +108,36 @@
       <groupId>org.fusesource.hawtdispatch</groupId>
       <artifactId>hawtdispatch-transport</artifactId>
       <version>${hawtdispatch-version}</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.fusesource.fabric</groupId>
       <artifactId>fabric-groups</artifactId>
-      <version>7.2.0.redhat-024</version>
+      <version>${fabric-version}</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.fusesource.fabric</groupId>
       <artifactId>fabric-linkedin-zookeeper</artifactId>
-      <version>7.2.0.redhat-024</version>
+      <version>${fabric-version}</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.fusesource.fabric</groupId>
       <artifactId>fabric-zookeeper</artifactId>
-      <version>7.2.0.redhat-024</version>
+      <version>${fabric-version}</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.osgi</groupId>
       <artifactId>org.osgi.core</artifactId>
-      <version>4.3.1</version>
+      <version>${org.osgi.core-version}</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.osgi</groupId>
       <artifactId>org.osgi.compendium</artifactId>
-      <version>4.3.1</version>
+      <version>${org.osgi.core-version}</version>
       <scope>provided</scope>
     </dependency>
 
@@ -410,20 +414,6 @@
                     <versionRange>[${hawtbuf-version},)</versionRange>
                     <goals>
                       <goal>compile</goal>
-                    </goals>
-                  </pluginExecutionFilter>
-                  <action>
-                    <ignore />
-                  </action>
-                </pluginExecution>
-                <pluginExecution>
-                  <pluginExecutionFilter>
-                    <groupId>net.alchim31.maven</groupId>
-                    <artifactId>scala-maven-plugin</artifactId>
-                    <versionRange>[${scala-plugin-version},)</versionRange>
-                    <goals>
-                      <goal>compile</goal>
-                      <goal>testCompile</goal>
                     </goals>
                   </pluginExecutionFilter>
                   <action>

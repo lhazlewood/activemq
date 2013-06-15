@@ -46,8 +46,8 @@
     <aopalliance-version>1.0</aopalliance-version>
     <aries-version>1.0.0</aries-version>
     <axion-version>1.0-M3-dev</axion-version>
-    <camel-version>2.10.4</camel-version>
-    <camel-version-range>[2.10,3)</camel-version-range>
+    <camel-version>2.12-SNAPSHOT</camel-version>
+    <camel-version-range>[2.12,3)</camel-version-range>
     <cglib-version>2.0</cglib-version>
     <commons-beanutils-version>1.8.3</commons-beanutils-version>
     <commons-collections-version>3.2.1</commons-collections-version>
@@ -60,6 +60,7 @@
     <commons-primitives-version>1.0</commons-primitives-version>
     <commons-net-version>3.2</commons-net-version>
     <directory-version>2.0.0-M6</directory-version>
+    <hawtio-version>1.2-M1</hawtio-version>
 
     <ftpserver-version>1.0.6</ftpserver-version>
     <geronimo-version>1.0</geronimo-version>
@@ -93,6 +94,7 @@
     <opensymphony-version>2.4.2</opensymphony-version>
     <org-apache-derby-version>10.9.1.0</org-apache-derby-version>
     <org.osgi.core-version>4.3.1</org.osgi.core-version>
+    <fabric-version>7.2.0.redhat-024</fabric-version>
     <p2psockets-version>1.1.2</p2psockets-version>
     <qpid-proton-version>0.3.0-fuse-3</qpid-proton-version>
     <qpid-jms-version>0.20</qpid-jms-version>

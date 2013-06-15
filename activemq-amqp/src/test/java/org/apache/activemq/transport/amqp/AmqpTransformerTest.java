@@ -16,6 +16,22 @@
  */
 package org.apache.activemq.transport.amqp;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+
+import javax.jms.BytesMessage;
+import javax.jms.Connection;
+import javax.jms.ExceptionListener;
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageConsumer;
+import javax.jms.MessageProducer;
+import javax.jms.Queue;
+import javax.jms.Session;
+import javax.jms.TextMessage;
+
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.broker.BrokerService;
 import org.apache.activemq.broker.TransportConnector;
@@ -23,17 +39,15 @@ import org.apache.qpid.amqp_1_0.jms.impl.ConnectionFactoryImpl;
 import org.apache.qpid.amqp_1_0.jms.impl.QueueImpl;
 import org.junit.After;
 import org.junit.Test;
-
-import javax.jms.*;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author <a href="http://www.christianposta.com/blog">Christian Posta</a>
  */
 public class AmqpTransformerTest {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AmqpTransformerTest.class);
 
     private static final String AMQP_URL = "amqp://0.0.0.0:0%s";
     private BrokerService brokerService;
@@ -63,7 +77,6 @@ public class AmqpTransformerTest {
         amqpSession.close();
         amqpConnection.close();
 
-
         // receive with openwire JMS
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory("tcp://0.0.0.0:" + openwirePort);
         Connection openwireConn = factory.createConnection();
@@ -86,10 +99,9 @@ public class AmqpTransformerTest {
         c.close();
         session.close();
         openwireConn.close();
-
     }
 
-    @Test
+    @Test(timeout = 30000)
     public void testRawTransformation() throws Exception {
 
         // default is native
@@ -111,7 +123,6 @@ public class AmqpTransformerTest {
         amqpSession.close();
         amqpConnection.close();
 
-
         // receive with openwire JMS
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory("tcp://0.0.0.0:" + openwirePort);
         Connection openwireConn = factory.createConnection();
@@ -121,8 +132,10 @@ public class AmqpTransformerTest {
 
         MessageConsumer c = session.createConsumer(jmsDest);
 
-        Message message = c.receive(1000);
+        Message message = c.receive(2000);
 
+        assertNotNull("Should have received a message", message);
+        LOG.info("Recieved message: ", message);
         assertTrue(message instanceof BytesMessage);
         Boolean nativeTransformationUsed = message.getBooleanProperty("JMS_AMQP_NATIVE");
         Long messageFormat = message.getLongProperty("JMS_AMQP_MESSAGE_FORMAT");
@@ -130,15 +143,13 @@ public class AmqpTransformerTest {
         assertTrue("Didn't use the correct transformation, expected NATIVE", nativeTransformationUsed);
         assertEquals(2, message.getJMSDeliveryMode());
 
-        // should not equal 7 (should equal the default)  because "raw" does not map
+        // should not equal 7 (should equal the default) because "raw" does not map
         // headers
         assertEquals(4, message.getJMSPriority());
-
 
         c.close();
         session.close();
         openwireConn.close();
-
     }
 
     @Test
@@ -162,7 +173,6 @@ public class AmqpTransformerTest {
         amqpSession.close();
         amqpConnection.close();
 
-
         // receive with openwire JMS
         ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory("tcp://0.0.0.0:" + openwirePort);
         Connection openwireConn = factory.createConnection();
@@ -184,7 +194,6 @@ public class AmqpTransformerTest {
         c.close();
         session.close();
         openwireConn.close();
-
     }
 
     public Connection createAmqpConnection() throws JMSException {
@@ -200,14 +209,13 @@ public class AmqpTransformerTest {
         return connection;
     }
 
-
     public void startBrokerWithAmqpTransport(String amqpUrl) throws Exception {
         brokerService = new BrokerService();
         brokerService.setPersistent(false);
         brokerService.setAdvisorySupport(false);
         brokerService.setDeleteAllMessagesOnStartup(true);
 
-        TransportConnector connector =  brokerService.addConnector(amqpUrl);
+        TransportConnector connector = brokerService.addConnector(amqpUrl);
         amqpPort = connector.getConnectUri().getPort();
         connector = brokerService.addConnector("tcp://0.0.0.0:0");
         openwirePort = connector.getConnectUri().getPort();

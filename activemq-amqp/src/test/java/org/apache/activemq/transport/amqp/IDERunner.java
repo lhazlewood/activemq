@@ -14,18 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.activemq.store.leveldb;
+package org.apache.activemq.transport.amqp;
 
-import org.apache.activemq.leveldb.replicated.ElectingLevelDBStore;
-import org.apache.activemq.store.PersistenceAdapter;
+import org.apache.activemq.broker.BrokerService;
+// import org.apache.activemq.leveldb.LevelDBStore;
 
+import java.io.File;
 
-/**
- * An implementation of {@link org.apache.activemq.store.PersistenceAdapter} designed for use with
- * LevelDB - Embedded Lightweight Non-Relational Database
- *
- * @org.apache.xbean.XBean element="replicatedLevelDB"
- *
- */
-public class ReplicatedLevelDBPersistenceAdapter extends ElectingLevelDBStore implements PersistenceAdapter {
+public class IDERunner {
+
+    public static void main(String[]args) throws Exception {
+        BrokerService bs = new BrokerService();
+        bs.addConnector("tcp://localhost:61616");
+        // LevelDBStore store = new LevelDBStore();
+        // store.setDirectory(new File("target/activemq-data/haleveldb"));
+        // bs.setPersistenceAdapter(store);
+        // bs.deleteAllMessages();
+        bs.start();
+        bs.waitUntilStopped();
+    }
 }

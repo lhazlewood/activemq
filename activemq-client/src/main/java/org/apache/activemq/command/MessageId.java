@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @openwire:marshaller code="110"
- * 
+ *
  */
 public class MessageId implements DataStructure, Comparable<MessageId> {
 
@@ -77,9 +77,8 @@ public class MessageId implements DataStructure, Comparable<MessageId> {
     }
 
     /**
-     * Sets the transient text view of the message which will be ignored if the
-     * message is marshaled on a transport; so is only for in-JVM changes to
-     * accommodate foreign JMS message IDs
+     * Sets the transient text view of the message which will be ignored if the message is marshaled on a transport; so
+     * is only for in-JVM changes to accommodate foreign JMS message IDs
      */
     public void setTextView(String key) {
         this.textView = key;
@@ -93,10 +92,12 @@ public class MessageId implements DataStructure, Comparable<MessageId> {
         return textView;
     }
 
+    @Override
     public byte getDataStructureType() {
         return DATA_STRUCTURE_TYPE;
     }
 
+    @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;
@@ -105,32 +106,34 @@ public class MessageId implements DataStructure, Comparable<MessageId> {
             return false;
         }
 
-        MessageId id = (MessageId)o;
+        MessageId id = (MessageId) o;
         return producerSequenceId == id.producerSequenceId && producerId.equals(id.producerId);
     }
 
+    @Override
     public int hashCode() {
         if (hashCode == 0) {
-            hashCode = producerId.hashCode() ^ (int)producerSequenceId;
+            hashCode = producerId.hashCode() ^ (int) producerSequenceId;
         }
         return hashCode;
     }
 
     public String toProducerKey() {
-        if( textView==null ) {
+        if (textView == null) {
             return toString();
         } else {
             return producerId.toString() + ":" + producerSequenceId;
         }
     }
 
+    @Override
     public String toString() {
         if (key == null) {
-            if( textView!=null ) {
-                if( textView.startsWith("ID:") ) {
+            if (textView != null) {
+                if (textView.startsWith("ID:")) {
                     key = textView;
                 } else {
-                    key = "ID:"+textView;
+                    key = "ID:" + textView;
                 }
             } else {
                 key = producerId.toString() + ":" + producerSequenceId;
@@ -172,6 +175,7 @@ public class MessageId implements DataStructure, Comparable<MessageId> {
         this.brokerSequenceId = brokerSequenceId;
     }
 
+    @Override
     public boolean isMarshallAware() {
         return false;
     }
@@ -183,6 +187,7 @@ public class MessageId implements DataStructure, Comparable<MessageId> {
         copy.dataLocator = dataLocator;
         copy.entryLocator = entryLocator;
         copy.plistLocator = plistLocator;
+        copy.textView = textView;
         return copy;
     }
 
@@ -191,6 +196,7 @@ public class MessageId implements DataStructure, Comparable<MessageId> {
      * @return
      * @see java.lang.Comparable#compareTo(java.lang.Object)
      */
+    @Override
     public int compareTo(MessageId other) {
         int result = -1;
         if (other != null) {
@@ -200,16 +206,14 @@ public class MessageId implements DataStructure, Comparable<MessageId> {
     }
 
     /**
-     * @return a locator which aids a message store in loading a message faster.  Only used
-     * by the message stores.
+     * @return a locator which aids a message store in loading a message faster. Only used by the message stores.
      */
     public Object getDataLocator() {
         return dataLocator.get();
     }
 
     /**
-     * Sets a locator which aids a message store in loading a message faster.  Only used
-     * by the message stores.
+     * Sets a locator which aids a message store in loading a message faster. Only used by the message stores.
      */
     public void setDataLocator(Object value) {
         this.dataLocator.set(value);
