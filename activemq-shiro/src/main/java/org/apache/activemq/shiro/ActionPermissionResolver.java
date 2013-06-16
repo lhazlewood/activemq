@@ -36,9 +36,11 @@ public interface ActionPermissionResolver {
      * {@link org.apache.shiro.subject.Subject Subject} in order for the {@code Subject} to execute the action, or
      * an empty collection if no permissions are required.
      * <p/>
-     * Most implementations will probably return a single Permission, but multiple permissions are possible.
+     * Most implementations will probably return a single Permission, but multiple permissions are possible, especially
+     * if the Action represents behavior attempted on a
+     * <a href="http://activemq.apache.org/composite-destinations.html">Composite Destination</a>.
      *
-     * @param action the action being attempted
+     * @param action the action attempted
      * @return all {@link Permission}s that must be granted to a
      *         {@link org.apache.shiro.subject.Subject Subject} in order for the {@code Subject} to execute the action,
      *         or an empty collection if no permissions are required.

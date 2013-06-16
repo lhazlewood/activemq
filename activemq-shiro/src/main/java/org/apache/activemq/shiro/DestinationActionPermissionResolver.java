@@ -26,8 +26,9 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * A {@code DestinationActionPermissionResolver} inspects {@link DestinationAction}s and returns a single
- * {@link WildcardPermission} to represent the action being taken on an {@link ActiveMQDestination}.
+ * A {@code DestinationActionPermissionResolver} inspects {@link DestinationAction}s and returns one or more
+ * {@link WildcardPermission}s that must be granted to a {@code Subject} in order for that {@code Subject} to
+ * perform the action being taken on an {@link ActiveMQDestination}.
  * <p/>
  * See the {@link #createPermissionString createPermissionString documentation} to see what the
  * resulting {@link WildcardPermission} instances would look like.
@@ -152,9 +153,12 @@ public class DestinationActionPermissionResolver implements ActionPermissionReso
             throw new IllegalArgumentException("Action argument must be a " + DestinationAction.class.getName() + " instance.");
         }
         DestinationAction da = (DestinationAction) action;
+        return getPermissions(da);
+    }
+
+    protected Collection<Permission> getPermissions(DestinationAction da) {
         ActiveMQDestination dest = da.getDestination();
         String verb = da.getVerb();
-
         return createPermissions(dest, verb);
     }
 
@@ -263,33 +267,6 @@ public class DestinationActionPermissionResolver implements ActionPermissionReso
     }
 
     protected Permission createPermission(String permissionString) {
-        return new AdjustedToStringWildcardPermission(permissionString, isPermissionStringCaseSensitive());
+        return new ActiveMQWildcardPermission(permissionString, isPermissionStringCaseSensitive());
     }
-
-    private static class AdjustedToStringWildcardPermission extends WildcardPermission {
-
-        public AdjustedToStringWildcardPermission(String wildcardString, boolean caseSensitive) {
-            super(wildcardString, caseSensitive);
-        }
-
-        @Override
-        public String toString() {
-            StringBuilder buffer = new StringBuilder();
-            for (Set<String> part : getParts()) {
-                if (buffer.length() > 0) {
-                    buffer.append(":");
-                }
-                boolean first = true;
-                for (String token : part) {
-                    if (!first) {
-                        buffer.append(",");
-                    }
-                    buffer.append(token);
-                    first = false;
-                }
-            }
-            return buffer.toString();
-        }
-    }
-
 }

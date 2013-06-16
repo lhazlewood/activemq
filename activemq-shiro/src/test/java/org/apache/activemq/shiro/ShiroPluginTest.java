@@ -16,7 +16,6 @@
  */
 package org.apache.activemq.shiro;
 
-import org.apache.activemq.ConfigurationException;
 import org.apache.activemq.broker.BrokerPlugin;
 import org.apache.activemq.broker.BrokerService;
 import org.apache.activemq.broker.MutableBrokerFilter;
@@ -27,6 +26,7 @@ import org.apache.shiro.config.Ini;
 import org.apache.shiro.env.DefaultEnvironment;
 import org.apache.shiro.env.Environment;
 import org.apache.shiro.mgt.DefaultSecurityManager;
+import org.apache.shiro.realm.text.IniRealm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -152,12 +152,54 @@ public class ShiroPluginTest extends TestSupport {
     }
 
     public void testNoEnvironmentOrSecurityManager() throws Exception {
+        //should build IniEnvironment from shiro.ini in the classpath at the least:
         ShiroPlugin plugin = new ShiroPlugin();
-        try {
-            plugin.installPlugin(new MutableBrokerFilter(null));
-            fail("Install should have failed when no Environment or SecurityManager is present.");
-        } catch (ConfigurationException expected) {
-        }
+        plugin.installPlugin(new MutableBrokerFilter(null));
+
+        Ini ini = Ini.fromResourcePath("classpath:shiro.ini");
+        IniRealm realm = (IniRealm) ((DefaultSecurityManager) plugin.getEnvironment().getSecurityManager()).getRealms().iterator().next();
+        assertEquals(ini, realm.getIni());
+    }
+
+    public void testSetIni() throws Exception {
+        ShiroPlugin plugin = new ShiroPlugin();
+        Ini ini = Ini.fromResourcePath("classpath:minimal.shiro.ini");
+        plugin.setIni(ini);
+        plugin.installPlugin(new MutableBrokerFilter(null));
+
+        IniRealm realm = (IniRealm) ((DefaultSecurityManager) plugin.getEnvironment().getSecurityManager()).getRealms().iterator().next();
+        assertSame(ini, realm.getIni());
+    }
+
+    public void testSetIniString() throws Exception {
+        ShiroPlugin plugin = new ShiroPlugin();
+        plugin.setIniConfig(
+                "[users]\n" +
+                "system = manager, system\n" +
+                "[roles]\n" +
+                "system = *");
+        plugin.installPlugin(new MutableBrokerFilter(null));
+
+        IniRealm realm = (IniRealm) ((DefaultSecurityManager) plugin.getEnvironment().getSecurityManager()).getRealms().iterator().next();
+        Ini ini = realm.getIni();
+        assertEquals(1, ini.getSection("users").size());
+        assertEquals("manager, system", ini.getSection("users").get("system"));
+        assertEquals(1, ini.getSection("roles").size());
+        assertEquals("*", ini.getSection("roles").get("system"));
+    }
+
+    public void testSetIniResourcePath() throws Exception {
+        ShiroPlugin plugin = new ShiroPlugin();
+
+        String path = "classpath:minimal.shiro.ini";
+
+        plugin.setIniResourcePath(path);
+        plugin.installPlugin(new MutableBrokerFilter(null));
+
+        Ini ini = Ini.fromResourcePath(path);
+
+        IniRealm realm = (IniRealm) ((DefaultSecurityManager) plugin.getEnvironment().getSecurityManager()).getRealms().iterator().next();
+        assertEquals(ini, realm.getIni());
     }
 
     public void testSetSubjectFilter() {
@@ -176,6 +218,15 @@ public class ShiroPluginTest extends TestSupport {
         assertSame(filter, plugin.getAuthenticationFilter());
         //assert that the AuthenticationFilter is always the next filter in the chain after the SubjectFilter:
         assertSame(plugin.getSubjectFilter().getNext(), filter);
+    }
+
+    public void testSetAuthorizationFilter() {
+        ShiroPlugin plugin = new ShiroPlugin();
+        AuthorizationFilter filter = new AuthorizationFilter();
+        plugin.setAuthorizationFilter(filter);
+        assertSame(filter, plugin.getAuthorizationFilter());
+        //assert that the AuthenticationFilter is always the next filter in the chain after the AuthenticationFilter:
+        assertSame(plugin.getAuthenticationFilter().getNext(), filter);
     }
 
     public void testSetEnvironment() {
@@ -262,6 +313,31 @@ public class ShiroPluginTest extends TestSupport {
         assertSame(policy, plugin.getAuthenticationPolicy());
         assertSame(policy, plugin.getAuthenticationFilter().getAuthenticationPolicy());
         assertSame(policy, ((DefaultConnectionSubjectFactory) plugin.getSubjectFilter().getConnectionSubjectFactory()).getAuthenticationPolicy());
+    }
+
+    public void testAuthorizationEnabledWhenNotInstalled() {
+        ShiroPlugin plugin = new ShiroPlugin();
+        assertTrue(plugin.isAuthorizationEnabled());
+
+        plugin.setAuthorizationEnabled(false);
+        assertFalse(plugin.isAuthorizationEnabled());
+
+        plugin.setAuthorizationEnabled(true);
+        assertTrue(plugin.isAuthorizationEnabled());
+    }
+
+    public void testAuthorizationEnabledWhenInstalled() throws Exception {
+        ShiroPlugin plugin = new ShiroPlugin();
+        plugin.setEnvironment(new DefaultEnvironment());
+        plugin.installPlugin(new MutableBrokerFilter(null));
+
+        assertTrue(plugin.isAuthorizationEnabled());
+
+        plugin.setAuthorizationEnabled(false);
+        assertFalse(plugin.isAuthorizationEnabled());
+
+        plugin.setAuthorizationEnabled(true);
+        assertTrue(plugin.isAuthorizationEnabled());
     }
 
 

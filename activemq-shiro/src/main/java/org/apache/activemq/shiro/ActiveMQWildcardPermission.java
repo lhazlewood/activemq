@@ -18,10 +18,8 @@ package org.apache.activemq.shiro;
 
 import org.apache.shiro.authz.Permission;
 import org.apache.shiro.authz.permission.WildcardPermission;
-import org.apache.shiro.util.AntPathMatcher;
 
 import java.lang.reflect.Method;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -30,7 +28,7 @@ import java.util.Set;
  */
 public class ActiveMQWildcardPermission extends WildcardPermission {
 
-    private static final AntPathMatcher matcher = new AntPathMatcher();
+    private final boolean caseSensitive;
 
     public ActiveMQWildcardPermission(String wildcardString) {
         this(wildcardString, true);
@@ -38,6 +36,7 @@ public class ActiveMQWildcardPermission extends WildcardPermission {
 
     public ActiveMQWildcardPermission(String wildcardString, boolean caseSensitive) {
         super(wildcardString, caseSensitive);
+        this.caseSensitive = caseSensitive;
     }
 
     @Override
@@ -65,6 +64,9 @@ public class ActiveMQWildcardPermission extends WildcardPermission {
                         continue;
                     }
                     for (String otherToken : otherPart) {
+                        if (!caseSensitive) {
+                            otherToken = otherToken.toLowerCase();
+                        }
                         if (!matches(token, otherToken)) {
                             return false;
                         }
@@ -144,8 +146,8 @@ public class ActiveMQWildcardPermission extends WildcardPermission {
             valIndex++;
         }
         if (valIndex > valEndIndex) {
-            // All characters in the string are used. Check if only '*'s are
-            // left in the pattern. If so, we succeeded. Otherwise failure.
+            // All characters in the value are used. Check if only '*'s remain
+            // in the pattern. If so, we succeeded. Otherwise failure.
             for (int i = patIndex; i <= patEndIndex; i++) {
                 if (patArr[i] != '*') {
                     return false;
@@ -165,8 +167,8 @@ public class ActiveMQWildcardPermission extends WildcardPermission {
             valEndIndex--;
         }
         if (valIndex > valEndIndex) {
-            // All characters in the string are used. Check if only '*'s are
-            // left in the pattern. If so, we succeeded. Otherwise failure.
+            // All characters in the value are used. Check if only '*'s remain
+            // in the pattern. If so, we succeeded. Otherwise failure.
             for (int i = patIndex; i <= patEndIndex; i++) {
                 if (patArr[i] != '*') {
                     return false;
@@ -175,47 +177,46 @@ public class ActiveMQWildcardPermission extends WildcardPermission {
             return true;
         }
 
-        // process pattern between stars. padIdxStart and patIdxEnd point
-        // always to a '*'.
+        // process pattern between stars. patIndex and patEndIndex always point to a '*'.
         while (patIndex != patEndIndex && valIndex <= valEndIndex) {
-            int patIdxTmp = -1;
+            int innerPatternIndex = -1;
             for (int i = patIndex + 1; i <= patEndIndex; i++) {
                 if (patArr[i] == '*') {
-                    patIdxTmp = i;
+                    innerPatternIndex = i;
                     break;
                 }
             }
-            if (patIdxTmp == patIndex + 1) {
+            if (innerPatternIndex == patIndex + 1) {
                 // Two stars next to each other, skip the first one.
                 patIndex++;
                 continue;
             }
-            // Find the pattern between padIdxStart & padIdxTmp in str between
-            // strIdxStart & strIdxEnd
-            int patLength = (patIdxTmp - patIndex - 1);
-            int strLength = (valEndIndex - valIndex + 1);
-            int foundIdx = -1;
-            strLoop:
-            for (int i = 0; i <= strLength - patLength; i++) {
-                for (int j = 0; j < patLength; j++) {
+            // Find the pattern between patIndex & innerPatternIndex in the value between
+            // valIndex and valEndIndex
+            int innerPatternLength = (innerPatternIndex - patIndex - 1);
+            int innerValueLength = (valEndIndex - valIndex + 1);
+            int foundIndex = -1;
+            innerValueLoop:
+            for (int i = 0; i <= innerValueLength - innerPatternLength; i++) {
+                for (int j = 0; j < innerPatternLength; j++) {
                     ch = patArr[patIndex + j + 1];
                     if (ch != '?') {
                         if (ch != valArr[valIndex + i + j]) {
-                            continue strLoop;
+                            continue innerValueLoop;
                         }
                     }
                 }
 
-                foundIdx = valIndex + i;
+                foundIndex = valIndex + i;
                 break;
             }
 
-            if (foundIdx == -1) {
+            if (foundIndex == -1) {
                 return false;
             }
 
-            patIndex = patIdxTmp;
-            valIndex = foundIdx + patLength;
+            patIndex = innerPatternIndex;
+            valIndex = foundIndex + innerPatternLength;
         }
 
         // All characters in the string are used. Check if only '*'s are left
@@ -237,14 +238,38 @@ public class ActiveMQWildcardPermission extends WildcardPermission {
         }
     }
 
-    @SuppressWarnings("unchecked")
     protected List<Set<String>> getPartsByReflection(WildcardPermission wp) {
         try {
-            Method getParts = WildcardPermission.class.getDeclaredMethod("getParts");
-            getParts.setAccessible(true);
-            return (List<Set<String>>) getParts.invoke(wp);
-        } catch (Throwable t) {
-            return Collections.emptyList();
+            return doGetPartsByReflection(wp);
+        } catch (Exception e) {
+            String msg = "Unable to obtain WildcardPermission instance's 'parts' value.";
+            throw new IllegalStateException(msg, e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    protected List<Set<String>> doGetPartsByReflection(WildcardPermission wp) throws Exception {
+        Method getParts = WildcardPermission.class.getDeclaredMethod("getParts");
+        getParts.setAccessible(true);
+        return (List<Set<String>>) getParts.invoke(wp);
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder buffer = new StringBuilder();
+        for (Set<String> part : getParts()) {
+            if (buffer.length() > 0) {
+                buffer.append(":");
+            }
+            boolean first = true;
+            for (String token : part) {
+                if (!first) {
+                    buffer.append(",");
+                }
+                buffer.append(token);
+                first = false;
+            }
+        }
+        return buffer.toString();
     }
 }

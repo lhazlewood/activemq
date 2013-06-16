@@ -22,7 +22,10 @@ import org.apache.shiro.config.Ini;
 import org.apache.shiro.config.IniSecurityManagerFactory;
 import org.apache.shiro.env.DefaultEnvironment;
 import org.apache.shiro.io.ResourceUtils;
+import org.apache.shiro.realm.Realm;
+import org.apache.shiro.realm.text.IniRealm;
 import org.apache.shiro.util.Initializable;
+import org.apache.shiro.util.LifecycleUtils;
 
 import java.util.Map;
 
@@ -96,6 +99,8 @@ public class IniEnvironment extends DefaultEnvironment implements Initializable 
                     "1) ini 2) iniConfig 3) iniResourcePath and the Ini sections are not empty.";
             throw new ConfigurationException(msg);
         }
+
+        LifecycleUtils.init(this.objects.values());
     }
 
     protected void apply(Ini ini) {
@@ -108,7 +113,14 @@ public class IniEnvironment extends DefaultEnvironment implements Initializable 
     }
 
     private Map<String, ?> createObjects(Ini ini) {
-        IniSecurityManagerFactory factory = new IniSecurityManagerFactory(ini);
+        IniSecurityManagerFactory factory = new IniSecurityManagerFactory(ini) {
+            @Override
+            protected Realm createRealm(Ini ini) {
+                IniRealm realm = (IniRealm)super.createRealm(ini);
+                realm.setPermissionResolver(new ActiveMQPermissionResolver());
+                return realm;
+            }
+        };
         factory.getInstance(); //trigger beans creation
         return factory.getBeans();
     }

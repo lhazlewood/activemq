@@ -16,7 +16,6 @@
  */
 package org.apache.activemq.shiro;
 
-import org.apache.activemq.broker.Broker;
 import org.apache.shiro.env.Environment;
 
 /**

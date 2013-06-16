@@ -19,6 +19,7 @@ package org.apache.activemq.shiro;
 import org.apache.activemq.ConfigurationException;
 import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.BrokerPluginSupport;
+import org.apache.shiro.config.Ini;
 import org.apache.shiro.env.Environment;
 import org.apache.shiro.mgt.SecurityManager;
 import org.slf4j.Logger;
@@ -35,8 +36,9 @@ public class ShiroPlugin extends BrokerPluginSupport {
 
     private Broker broker; //the downstream broker after any/all Shiro-specific broker filters
 
-    private Environment environment;
     private SecurityManager securityManager;
+    private Environment environment;
+    private IniEnvironment iniEnvironment; //only used if the above environment instance is not explicitly configured
 
     private SubjectFilter subjectFilter;
 
@@ -45,6 +47,9 @@ public class ShiroPlugin extends BrokerPluginSupport {
     private AuthorizationFilter authorizationFilter;
 
     public ShiroPlugin() {
+
+        //Default if this.environment is not configured. See the ensureEnvironment() method below.
+        iniEnvironment = new IniEnvironment();
 
         authorizationFilter = new AuthorizationFilter();
 
@@ -133,6 +138,18 @@ public class ShiroPlugin extends BrokerPluginSupport {
         this.securityManager = securityManager;
     }
 
+    public void setIni(Ini ini) {
+        this.iniEnvironment.setIni(ini);
+    }
+
+    public void setIniConfig(String iniConfig) {
+        this.iniEnvironment.setIniConfig(iniConfig);
+    }
+
+    public void setIniResourcePath(String resourcePath) {
+        this.iniEnvironment.setIniResourcePath(resourcePath);
+    }
+
     // ===============================================================
     // Authentication Configuration
     // ===============================================================
@@ -184,9 +201,11 @@ public class ShiroPlugin extends BrokerPluginSupport {
             return this.environment;
         }
 
-        String msg = "Configuration error.  Ensure you have configured a Shiro Environment or SecurityManager " +
-                "instance.";
-        throw new ConfigurationException(msg);
+        this.iniEnvironment.init(); //will automatically catch any config errors and throw.
+
+        this.environment = iniEnvironment;
+
+        return this.iniEnvironment;
     }
 
     @Override

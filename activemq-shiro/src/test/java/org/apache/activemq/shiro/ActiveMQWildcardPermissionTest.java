@@ -20,6 +20,9 @@ import org.apache.shiro.authz.Permission;
 import org.apache.shiro.authz.permission.WildcardPermission;
 import org.junit.Test;
 
+import java.util.List;
+import java.util.Set;
+
 import static org.junit.Assert.*;
 
 /**
@@ -50,33 +53,106 @@ public class ActiveMQWildcardPermissionTest {
 
     @Test
     public void testMatches() {
-        assertTrue(matches("x", "x"));
-        assertFalse(matches("x", "y"));
-        assertTrue(matches("*", "x"));
-        assertTrue(matches("*", "x:x"));
-        assertTrue(matches("*", "x:x:x"));
-        assertTrue(matches("foo?armat*", "foobarmatches"));
-        assertTrue(matches("f*", "f"));
-        assertTrue(matches("t*k?ou", "thankyou"));
-        assertTrue(matches("*:ActiveMQ.Advisory", "foo:ActiveMQ.Advisory"));
-        assertFalse(matches("*:ActiveMQ.Advisory", "foo:ActiveMQ.Advisory."));
-        assertTrue(matches("*:ActiveMQ.Advisory*", "foo:ActiveMQ.Advisory"));
-        assertTrue(matches("*:ActiveMQ.Advisory*", "foo:ActiveMQ.Advisory."));
-        assertTrue(matches("*:ActiveMQ.Advisory.*", "foo:ActiveMQ.Advisory.Connection"));
-        assertTrue(matches("*:ActiveMQ.Advisory*:read", "foo:ActiveMQ.Advisory.Connection:read"));
-        assertFalse(matches("*:ActiveMQ.Advisory*:read", "foo:ActiveMQ.Advisory.Connection:write"));
-        assertTrue(matches("*:ActiveMQ.Advisory*:*", "foo:ActiveMQ.Advisory.Connection:read"));
-        assertTrue(matches("*:ActiveMQ.Advisory*:*", "foo:ActiveMQ.Advisory."));
-        assertTrue(matches("topic", "topic:TEST:*"));
-        assertFalse(matches("*:ActiveMQ*", "topic:TEST:*"));
-        assertTrue(matches("topic:ActiveMQ.Advisory*", "topic:ActiveMQ.Advisory.Connection:create"));
-        assertTrue(matches("foo?ar", "foobar"));
+        assertMatch("x", "x");
+        assertNoMatch("x", "y");
+
+        assertMatch("xx", "xx");
+        assertNoMatch("xy", "xz");
+
+        assertMatch("?", "x");
+        assertMatch("x?", "xy");
+        assertMatch("?y", "xy");
+        assertMatch("x?z", "xyz");
+
+        assertMatch("*", "x");
+        assertMatch("x*", "x");
+        assertMatch("x*", "xy");
+        assertMatch("xy*", "xy");
+        assertMatch("xy*", "xyz");
+
+        assertMatch("*x", "x");
+        assertNoMatch("*x", "y");
+
+        assertMatch("*x", "wx");
+        assertNoMatch("*x", "wz");
+        assertMatch("*x", "vwx");
+
+        assertMatch("x*z", "xz");
+        assertMatch("x*z", "xyz");
+        assertMatch("x*z", "xyyz");
+
+        assertNoMatch("ab*t?z", "abz");
+        assertNoMatch("ab*d*yz", "abcdz");
+
+        assertMatch("ab**cd**ef*yz", "abcdefyz");
+        assertMatch("a*c?*z", "abcxyz");
+        assertMatch("a*cd*z", "abcdxyz");
+
+        assertMatch("*", "x:x");
+        assertMatch("*", "x:x:x");
+        assertMatch("x", "x:y");
+        assertMatch("x", "x:y:z");
+
+        assertMatch("foo?armat*", "foobarmatches");
+        assertMatch("f*", "f");
+        assertNoMatch("foo", "f");
+        assertMatch("fo*b", "foob");
+        assertNoMatch("fo*b*r", "fooba");
+        assertNoMatch("foo*", "f");
+
+        assertMatch("t*k?ou", "thankyou");
+        assertMatch("he*l*world", "helloworld");
+        assertNoMatch("foo", "foob");
+
+        assertMatch("*:ActiveMQ.Advisory", "foo:ActiveMQ.Advisory");
+        assertNoMatch("*:ActiveMQ.Advisory", "foo:ActiveMQ.Advisory.");
+        assertMatch("*:ActiveMQ.Advisory*", "foo:ActiveMQ.Advisory");
+        assertMatch("*:ActiveMQ.Advisory*", "foo:ActiveMQ.Advisory.");
+        assertMatch("*:ActiveMQ.Advisory.*", "foo:ActiveMQ.Advisory.Connection");
+        assertMatch("*:ActiveMQ.Advisory*:read", "foo:ActiveMQ.Advisory.Connection:read");
+        assertNoMatch("*:ActiveMQ.Advisory*:read", "foo:ActiveMQ.Advisory.Connection:write");
+        assertMatch("*:ActiveMQ.Advisory*:*", "foo:ActiveMQ.Advisory.Connection:read");
+        assertMatch("*:ActiveMQ.Advisory*:*", "foo:ActiveMQ.Advisory.");
+        assertMatch("topic", "topic:TEST:*");
+        assertNoMatch("*:ActiveMQ*", "topic:TEST:*");
+        assertMatch("topic:ActiveMQ.Advisory*", "topic:ActiveMQ.Advisory.Connection:create");
+        assertMatch("foo?ar", "foobar");
     }
 
-    protected boolean matches(String pattern, String value) {
+    protected static void assertMatch(String pattern, String value) {
+        assertTrue(matches(pattern, value));
+    }
+
+    protected static void assertNoMatch(String pattern, String value) {
+        assertFalse(matches(pattern, value));
+    }
+
+    protected static boolean matches(String pattern, String value) {
         ActiveMQWildcardPermission patternPerm = new ActiveMQWildcardPermission(pattern);
         WildcardPermission valuePerm = new WildcardPermission(value, true);
         return patternPerm.implies(valuePerm);
+    }
+
+    @Test(expected=IllegalStateException.class)
+    public void testGetPartsByReflectionThrowingException() {
+
+        ActiveMQWildcardPermission perm = new ActiveMQWildcardPermission("foo:bar") {
+            @Override
+            protected List<Set<String>> doGetPartsByReflection(WildcardPermission wp) throws Exception {
+                throw new RuntimeException("Testing failure");
+            }
+        };
+
+        WildcardPermission otherPerm = new WildcardPermission("foo:bar:baz");
+
+        perm.implies(otherPerm);
+    }
+
+    @Test
+    public void testImpliesWithExtraParts() {
+        ActiveMQWildcardPermission perm1 = new ActiveMQWildcardPermission("foo:bar:baz");
+        ActiveMQWildcardPermission perm2 = new ActiveMQWildcardPermission("foo:bar");
+        assertFalse(perm1.implies(perm2));
     }
 
 }

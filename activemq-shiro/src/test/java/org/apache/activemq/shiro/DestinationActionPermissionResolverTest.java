@@ -17,10 +17,12 @@
 package org.apache.activemq.shiro;
 
 import org.apache.activemq.broker.ConnectionContext;
+import org.apache.activemq.command.ActiveMQDestination;
 import org.apache.activemq.command.ActiveMQQueue;
 import org.apache.activemq.command.ActiveMQTempQueue;
 import org.apache.activemq.command.ActiveMQTempTopic;
 import org.apache.activemq.command.ActiveMQTopic;
+import org.apache.activemq.filter.AnyDestination;
 import org.apache.shiro.authz.Permission;
 import org.apache.shiro.authz.permission.WildcardPermission;
 import org.junit.Before;
@@ -62,7 +64,7 @@ public class DestinationActionPermissionResolverTest {
         assertTrue(resolver.isPermissionStringCaseSensitive());
     }
 
-    @Test(expected=IllegalArgumentException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testGetPermissionsWithNonDestinationActionInstance() {
         resolver.getPermissions(new Action() {
             @Override
@@ -72,9 +74,9 @@ public class DestinationActionPermissionResolverTest {
         });
     }
 
-    @Test(expected=IllegalArgumentException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testGetPermissionsWithNullArgument() {
-        resolver.getPermissions(null);
+        resolver.getPermissions((Action)null);
     }
 
     void assertPermString(String perm, Collection<Permission> perms) {
@@ -139,5 +141,13 @@ public class DestinationActionPermissionResolverTest {
         assertTrue(perm instanceof WildcardPermission);
         assertEquals("foo:bar:action1,action2", perm.toString());
 
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testCreatePermissionStringWithCompositeDestination() {
+        ActiveMQTopic topicA = new ActiveMQTopic("A");
+        ActiveMQTopic topicB = new ActiveMQTopic("B");
+        ActiveMQDestination composite = new AnyDestination(new ActiveMQDestination[]{topicA, topicB});
+        resolver.createPermissionString(composite, "read");
     }
 }
