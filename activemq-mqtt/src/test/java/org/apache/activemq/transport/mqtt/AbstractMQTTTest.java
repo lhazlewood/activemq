@@ -16,8 +16,6 @@
  */
 package org.apache.activemq.transport.mqtt;
 
-import static org.junit.Assert.assertArrayEquals;
-
 import java.io.File;
 import java.io.IOException;
 import java.security.ProtectionDomain;
@@ -29,7 +27,6 @@ import javax.jms.MessageConsumer;
 import javax.jms.MessageProducer;
 import javax.jms.Session;
 import javax.jms.TextMessage;
-
 import org.apache.activemq.ActiveMQConnection;
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.AutoFailTestSupport;
@@ -40,6 +37,7 @@ import org.apache.activemq.util.ByteSequence;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import static org.junit.Assert.assertArrayEquals;
 
 public abstract class AbstractMQTTTest extends AutoFailTestSupport {
     protected TransportConnector mqttConnector;
@@ -78,6 +76,7 @@ public abstract class AbstractMQTTTest extends AutoFailTestSupport {
         super.tearDown();
     }
 
+
     @Test(timeout=300000)
     public void testSendAndReceiveMQTT() throws Exception {
         addMQTTConnector();
@@ -114,6 +113,54 @@ public abstract class AbstractMQTTTest extends AutoFailTestSupport {
         for (int i = 0; i < numberOfMessages; i++){
             String payload = "Message " + i;
             publishProvider.publish("foo/bah",payload.getBytes(),AT_LEAST_ONCE);
+        }
+
+        latch.await(10, TimeUnit.SECONDS);
+        assertEquals(0, latch.getCount());
+        subscriptionProvider.disconnect();
+        publishProvider.disconnect();
+    }
+
+    @Test(timeout=300000)
+    public void testUnsubscribeMQTT() throws Exception {
+        addMQTTConnector();
+        brokerService.start();
+        final MQTTClientProvider subscriptionProvider = getMQTTClientProvider();
+        initializeConnection(subscriptionProvider);
+
+        String topic = "foo/bah";
+
+        subscriptionProvider.subscribe(topic,AT_MOST_ONCE);
+
+        final CountDownLatch latch = new CountDownLatch(numberOfMessages/2);
+
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                for (int i = 0; i < numberOfMessages; i++){
+                    try {
+                        byte[] payload = subscriptionProvider.receive(10000);
+                        assertNotNull("Should get a message", payload);
+                        latch.countDown();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        break;
+                    }
+
+                }
+            }
+        });
+        thread.start();
+
+        final MQTTClientProvider publishProvider = getMQTTClientProvider();
+        initializeConnection(publishProvider);
+
+        for (int i = 0; i < numberOfMessages; i++){
+            String payload = "Message " + i;
+            if (i == numberOfMessages/2){
+                subscriptionProvider.unsubscribe(topic);
+            }
+            publishProvider.publish(topic,payload.getBytes(),AT_LEAST_ONCE);
         }
 
         latch.await(10, TimeUnit.SECONDS);

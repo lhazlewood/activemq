@@ -79,7 +79,7 @@ import org.fusesource.mqtt.codec.UNSUBSCRIBE;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class MQTTProtocolConverter {
+public class MQTTProtocolConverter {
 
     private static final Logger LOG = LoggerFactory.getLogger(MQTTProtocolConverter.class);
 
@@ -277,6 +277,7 @@ class MQTTProtocolConverter {
 
     void onMQTTDisconnect() throws MQTTProtocolException {
         if (connected.get()) {
+            connected.set(false);
             sendToActiveMQ(connectionInfo.createRemoveCommand(), null);
             sendToActiveMQ(new ShutdownInfo(), null);
         }
@@ -542,7 +543,7 @@ class MQTTProtocolConverter {
 
     public void onTransportError() {
         if (connect != null) {
-            if (connect.willTopic() != null && connect.willMessage() != null) {
+            if (connected.get() && connect.willTopic() != null && connect.willMessage() != null) {
                 try {
                     PUBLISH publish = new PUBLISH();
                     publish.topicName(connect.willTopic());

@@ -1,6 +1,6 @@
 package org.apache.activemq.leveldb.replicated
 
-import org.fusesource.fabric.groups._
+import org.apache.activemq.leveldb.replicated.groups._
 import org.codehaus.jackson.annotate.JsonProperty
 import org.apache.activemq.leveldb.util.{Log, JsonCodec}
 
@@ -82,7 +82,7 @@ class MasterElector(store: ElectingLevelDBStore) extends ClusteredSingleton[Leve
     def disconnected = changed
 
     def changed:Unit = elector.synchronized {
-      // info(eid+" cluster state changed: "+members)
+//      info(eid+" cluster state changed: "+members)
       if (isMaster) {
         // We are the master elector, we will choose which node will startup the MasterLevelDBStore
         members.get(store.brokerName) match {
@@ -91,7 +91,8 @@ class MasterElector(store: ElectingLevelDBStore) extends ClusteredSingleton[Leve
           case Some(members) =>
 
             if (members.size < store.clusterSizeQuorum) {
-              info("Not enough cluster members connected to elect a new master.")
+              info("Not enough cluster members connected to elect a master.")
+              elected = null
             } else {
 
               // If we already elected a master, lets make sure he is still online..

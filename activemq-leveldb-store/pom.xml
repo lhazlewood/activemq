@@ -77,6 +77,9 @@
       <artifactId>leveldbjni</artifactId>
       <version>${leveldbjni-version}</version>
     </dependency>
+    
+    <!-- Lets not include the JNI libs for now so that we can harden the pure java driver more -->
+    <!--
     <dependency>
       <groupId>org.fusesource.leveldbjni</groupId>
       <artifactId>leveldbjni-osx</artifactId>
@@ -102,7 +105,8 @@
       <artifactId>leveldbjni-win64</artifactId>
       <version>1.5</version>
     </dependency>
-
+    -->
+    
     <!-- For Replication -->
     <dependency>
       <groupId>org.fusesource.hawtdispatch</groupId>
@@ -110,24 +114,26 @@
       <version>${hawtdispatch-version}</version>
       <scope>provided</scope>
     </dependency>
+
     <dependency>
-      <groupId>org.fusesource.fabric</groupId>
-      <artifactId>fabric-groups</artifactId>
-      <version>${fabric-version}</version>
+      <groupId>org.linkedin</groupId>
+      <artifactId>org.linkedin.zookeeper-impl</artifactId>
+      <version>${linkedin-zookeeper-version}</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.fusesource.fabric</groupId>
-      <artifactId>fabric-linkedin-zookeeper</artifactId>
-      <version>${fabric-version}</version>
+      <groupId>org.linkedin</groupId>
+      <artifactId>org.linkedin.util-core</artifactId>
+      <version>${linkedin-zookeeper-version}</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.fusesource.fabric</groupId>
-      <artifactId>fabric-zookeeper</artifactId>
-      <version>${fabric-version}</version>
+      <groupId>org.apache.zookeeper</groupId>
+      <artifactId>zookeeper</artifactId>
+      <version>${zookeeper-version}</version>
       <scope>provided</scope>
     </dependency>
+
     <dependency>
       <groupId>org.osgi</groupId>
       <artifactId>org.osgi.core</artifactId>
@@ -145,7 +151,7 @@
     <dependency>
       <groupId>org.xerial.snappy</groupId>
       <artifactId>snappy-java</artifactId>
-      <version>1.0.3</version>
+      <version>${snappy-version}</version>
     </dependency>
     <dependency>
       <groupId>org.iq80.snappy</groupId>

@@ -59,6 +59,7 @@ import org.apache.activemq.broker.region.cursors.VMPendingMessageCursor;
 import org.apache.activemq.broker.region.group.MessageGroupHashBucketFactory;
 import org.apache.activemq.broker.region.group.MessageGroupMap;
 import org.apache.activemq.broker.region.group.MessageGroupMapFactory;
+import org.apache.activemq.broker.region.policy.DeadLetterStrategy;
 import org.apache.activemq.broker.region.policy.DispatchPolicy;
 import org.apache.activemq.broker.region.policy.RoundRobinDispatchPolicy;
 import org.apache.activemq.broker.util.InsertionCountList;
@@ -562,6 +563,7 @@ public class Queue extends BaseDestination implements Task, UsageListener {
                         }
                     }
                 }
+
                 for (MessageReference ref : unAckedMessages) {
                     QueueMessageReference qmr = (QueueMessageReference) ref;
                     if (qmr.getLockOwner() == sub) {
@@ -580,7 +582,9 @@ public class Queue extends BaseDestination implements Task, UsageListener {
                             }
                         }
                     }
-                    redeliveredWaitingDispatch.addMessageLast(qmr);
+                    if (!qmr.isDropped()) {
+                        redeliveredWaitingDispatch.addMessageLast(qmr);
+                    }
                 }
                 if (sub instanceof QueueBrowserSubscription) {
                     ((QueueBrowserSubscription)sub).decrementQueueRef();
@@ -692,7 +696,7 @@ public class Queue extends BaseDestination implements Task, UsageListener {
                                     }
 
                                 } catch (Exception e) {
-                                    if (!sendProducerAck && !context.isInRecoveryMode()) {
+                                    if (!sendProducerAck && !context.isInRecoveryMode() && !brokerService.isStopping()) {
                                         ExceptionResponse response = new ExceptionResponse(e);
                                         response.setCorrelationId(message.getCommandId());
                                         context.getConnection().dispatchAsync(response);
@@ -1451,9 +1455,13 @@ public class Queue extends BaseDestination implements Task, UsageListener {
         BrokerSupport.resend(context, m.getMessage(), dest);
         removeMessage(context, m);
         messagesLock.writeLock().lock();
-        try{
+        try {
             messages.rollback(m.getMessageId());
-        }finally {
+            if (isDLQ()) {
+                DeadLetterStrategy stratagy = getDeadLetterStrategy();
+                stratagy.rollback(m.getMessage());
+            }
+        } finally {
             messagesLock.writeLock().unlock();
         }
         return true;
@@ -1782,7 +1790,7 @@ public class Queue extends BaseDestination implements Task, UsageListener {
                 });
             }
         }
-        if (ack.isPoisonAck()) {
+        if (ack.isPoisonAck() || (sub != null && sub.getConsumerInfo().isNetworkSubscription())) {
             // message gone to DLQ, is ok to allow redelivery
             messagesLock.writeLock().lock();
             try{
@@ -1795,13 +1803,15 @@ public class Queue extends BaseDestination implements Task, UsageListener {
     }
 
     private void dropMessage(QueueMessageReference reference) {
-        reference.drop();
-        destinationStatistics.getMessages().decrement();
-        pagedInMessagesLock.writeLock().lock();
-        try{
-            pagedInMessages.remove(reference.getMessageId());
-        }finally {
-            pagedInMessagesLock.writeLock().unlock();
+        if (!reference.isDropped()) {
+            reference.drop();
+            destinationStatistics.getMessages().decrement();
+            pagedInMessagesLock.writeLock().lock();
+            try {
+                pagedInMessages.remove(reference.getMessageId());
+            } finally {
+                pagedInMessagesLock.writeLock().unlock();
+            }
         }
     }
 

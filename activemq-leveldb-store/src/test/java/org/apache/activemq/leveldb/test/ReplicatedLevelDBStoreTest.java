@@ -16,6 +16,7 @@
  */
 package org.apache.activemq.leveldb.test;
 
+import org.apache.activemq.Service;
 import org.apache.activemq.command.ActiveMQQueue;
 import org.apache.activemq.leveldb.CountDownFuture;
 import org.apache.activemq.leveldb.LevelDBStore;
@@ -49,32 +50,30 @@ public class ReplicatedLevelDBStoreTest {
         FileSupport.toRichFile(masterDir).recursiveDelete();
         FileSupport.toRichFile(slaveDir).recursiveDelete();
 
-        MasterLevelDBStore master = createMaster(masterDir);
+        final MasterLevelDBStore master = createMaster(masterDir);
         master.setReplicas(2);
-        master.start();
+        CountDownFuture masterStartLatch = asyncStart(master);
 
-        MessageStore ms = master.createQueueMessageStore(new ActiveMQQueue("TEST"));
-
-        // Updating the store should not complete since we don't have enough
+        // Start the store should not complete since we don't have enough
         // replicas.
-        CountDownFuture f = asyncAddMessage(ms, "m1");
-        assertFalse(f.await(2, TimeUnit.SECONDS));
+        assertFalse(masterStartLatch.await(2, TimeUnit.SECONDS));
 
-        // Adding a slave should allow that update to complete.
+        // Adding a slave should allow the master startup to complete.
         SlaveLevelDBStore slave = createSlave(master, slaveDir);
         slave.start();
 
-        assertTrue(f.await(2, TimeUnit.SECONDS));
+        assertTrue(masterStartLatch.await(2, TimeUnit.SECONDS));
 
         // New updates should complete quickly now..
-        f = asyncAddMessage(ms, "m2");
+        MessageStore ms = master.createQueueMessageStore(new ActiveMQQueue("TEST"));
+        CountDownFuture f = asyncAddMessage(ms, "m1");
         assertTrue(f.await(1, TimeUnit.SECONDS));
 
         // If the slave goes offline, then updates should once again
         // not complete.
         slave.stop();
 
-        f = asyncAddMessage(ms, "m3");
+        f = asyncAddMessage(ms, "m2");
         assertFalse(f.await(2, TimeUnit.SECONDS));
 
         // Restart and the op should complete.
@@ -102,6 +101,20 @@ public class ReplicatedLevelDBStoreTest {
         return f;
     }
 
+    private CountDownFuture asyncStart(final Service service) {
+        final CountDownFuture<Throwable> f = new CountDownFuture<Throwable>();
+        LevelDBStore.BLOCKING_EXECUTOR().execute(new Runnable() {
+            public void run() {
+                try {
+                    service.start();
+                    f.set(null);
+                } catch (Throwable e) {
+                    f.set(e);
+                }
+            }
+        });
+        return f;
+    }
 
     @Test(timeout = 1000*60*60)
     public void testReplication() throws Exception {
@@ -120,10 +133,11 @@ public class ReplicatedLevelDBStoreTest {
         for (int j = 0; j < 10; j++) {
 
             MasterLevelDBStore master = createMaster(directories.get(0));
-            master.start();
+            CountDownFuture masterStart = asyncStart(master);
             SlaveLevelDBStore slave1 = createSlave(master, directories.get(1));
             SlaveLevelDBStore slave2 = createSlave(master, directories.get(2));
-            slave2.start();
+            asyncStart(slave2);
+            masterStart.await();
 
             LOG.info("Adding messages...");
             MessageStore ms = master.createQueueMessageStore(new ActiveMQQueue("TEST"));
@@ -146,9 +160,9 @@ public class ReplicatedLevelDBStoreTest {
             LOG.info("Checking master state");
             assertEquals(expected_list, getMessages(ms));
 
-            LOG.info("Stopping master: " + master.replicaId());
+            LOG.info("Stopping master: " + master.node_id());
             master.stop();
-            LOG.info("Stopping slave: " + slave1.replicaId());
+            LOG.info("Stopping slave: " + slave1.node_id());
             slave1.stop();
 
             // Rotate the dir order so that slave1 becomes the master next.

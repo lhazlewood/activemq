@@ -16,12 +16,10 @@
  */
 package org.apache.activemq.leveldb.replicated
 
-import org.fusesource.fabric.groups._
-import org.fusesource.fabric.zookeeper.internal.ZKClient
 import org.linkedin.util.clock.Timespan
 import scala.reflect.BeanProperty
-import org.apache.activemq.util.{ServiceStopper, ServiceSupport}
-import org.apache.activemq.leveldb.{LevelDBClient, RecordLog, LevelDBStore}
+import org.apache.activemq.util.{JMXSupport, ServiceStopper, ServiceSupport}
+import org.apache.activemq.leveldb.{LevelDBStoreViewMBean, LevelDBClient, RecordLog, LevelDBStore}
 import java.net.{NetworkInterface, InetAddress}
 import org.fusesource.hawtdispatch._
 import org.apache.activemq.broker.Locker
@@ -32,6 +30,13 @@ import org.apache.activemq.leveldb.util.Log
 import java.io.File
 import org.apache.activemq.usage.SystemUsage
 import org.apache.activemq.ActiveMQMessageAuditNoSync
+import org.fusesource.hawtdispatch
+import org.apache.activemq.broker.jmx.{OpenTypeSupport, BrokerMBeanSupport, AnnotatedMBean}
+import org.apache.activemq.leveldb.LevelDBStore._
+import javax.management.ObjectName
+import javax.management.openmbean.{CompositeDataSupport, SimpleType, CompositeType, CompositeData}
+import java.util
+import org.apache.activemq.leveldb.replicated.groups._
 
 object ElectingLevelDBStore extends Log {
 
@@ -76,7 +81,7 @@ class ElectingLevelDBStore extends ProxyLevelDBStore {
   var bind = "tcp://0.0.0.0:61619"
 
   @BeanProperty
-  var replicas = 2
+  var replicas = 3
   @BeanProperty
   var sync="quorum_mem"
 
@@ -139,7 +144,19 @@ class ElectingLevelDBStore extends ProxyLevelDBStore {
     this.usageManager = usageManager
   }
 
+  def node_id = ReplicatedLevelDBStoreTrait.node_id(directory)
+
   def init() {
+
+    if(brokerService!=null){
+      try {
+        AnnotatedMBean.registerMBean(brokerService.getManagementContext, new ReplicatedLevelDBStoreView(this), objectName)
+      } catch {
+        case e: Throwable => {
+          warn(e, "PersistenceAdapterReplication could not be registered in JMX: " + e.getMessage)
+        }
+      }
+    }
 
     // Figure out our position in the store.
     directory.mkdirs()
@@ -193,10 +210,12 @@ class ElectingLevelDBStore extends ProxyLevelDBStore {
   def start_master(func: (Int) => Unit) = {
     assert(master==null)
     master = create_master()
+    master_started.set(true)
     master.blocking_executor.execute(^{
-      master_started.set(true)
       master.start();
       master_started_latch.countDown()
+    })
+    master.blocking_executor.execute(^{
       func(master.getPort)
     })
   }
@@ -217,11 +236,20 @@ class ElectingLevelDBStore extends ProxyLevelDBStore {
     })
   }
 
+  def objectName = {
+    var objectNameStr = BrokerMBeanSupport.createPersistenceAdapterName(brokerService.getBrokerObjectName.toString, "LevelDB[" + directory.getAbsolutePath + "]").toString
+    objectNameStr += "," + "view=Replication";
+    new ObjectName(objectNameStr);
+  }
+
   protected def doStart() = {
     master_started_latch.await()
   }
 
   protected def doStop(stopper: ServiceStopper) {
+    if(brokerService!=null){
+      brokerService.getManagementContext().unregisterMBean(objectName);
+    }
     zk_client.close()
     zk_client = null
     if( master_started.get() ) {
@@ -326,4 +354,83 @@ class ElectingLevelDBStore extends ProxyLevelDBStore {
       rc
     }
   }
+}
+
+
+class ReplicatedLevelDBStoreView(val store:ElectingLevelDBStore) extends ReplicatedLevelDBStoreViewMBean {
+  import store._
+
+  def getZkAddress = zkAddress
+  def getZkPath = zkPath
+  def getZkSessionTmeout = zkSessionTmeout
+  def getBind = bind
+  def getReplicas = replicas
+
+  def getNodeRole:String = {
+    if( slave!=null ) {
+      return "slave"
+    }
+    if( master!=null ) {
+      return "master"
+    }
+    "electing"
+  }
+
+  def getStatus:String = {
+    if( slave!=null ) {
+      return slave.status
+    }
+    if( master!=null ) {
+      return master.status
+    }
+    ""
+  }
+
+  object SlaveStatusOTF extends OpenTypeSupport.AbstractOpenTypeFactory {
+    protected def getTypeName: String = classOf[SlaveStatus].getName
+
+    protected override def init() = {
+      super.init();
+      addItem("nodeId", "nodeId", SimpleType.STRING);
+      addItem("remoteAddress", "remoteAddress", SimpleType.STRING);
+      addItem("attached", "attached", SimpleType.BOOLEAN);
+      addItem("position", "position", SimpleType.LONG);
+    }
+
+    override def getFields(o: Any): util.Map[String, AnyRef] = {
+      val status = o.asInstanceOf[SlaveStatus]
+      val rc = super.getFields(o);
+      rc.put("nodeId", status.nodeId);
+      rc.put("remoteAddress", status.remoteAddress);
+      rc.put("attached", status.attached.asInstanceOf[java.lang.Boolean]);
+      rc.put("position", status.position.asInstanceOf[java.lang.Long]);
+      rc
+    }
+  }
+
+  def getSlaves():Array[CompositeData] =  {
+    if( master!=null ) {
+      master.slaves_status.map { status =>
+        val fields = SlaveStatusOTF.getFields(status);
+        new CompositeDataSupport(SlaveStatusOTF.getCompositeType(), fields).asInstanceOf[CompositeData]
+      }.toArray
+    } else {
+      Array()
+    }
+  }
+
+  def getPosition:java.lang.Long = {
+    if( slave!=null ) {
+      return new java.lang.Long(slave.wal_append_position)
+    }
+    if( master!=null ) {
+      return new java.lang.Long(master.wal_append_position)
+    }
+    null
+  }
+
+  def getDirectory = directory.getCanonicalPath
+  def getSync = sync
+
+  def getNodeId: String = node_id
 }
