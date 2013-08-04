@@ -15,9 +15,8 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-
 <!-- this file can only be parsed using the xbean-spring library -->
-<!-- START SNIPPET: example -->
+<!--suppress SpringInjectionValueStyleInspection -->
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:amq="http://activemq.apache.org/schema/core"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -37,17 +36,26 @@
         </transportConnectors>
 
         <plugins>
-
             <bean id="shiroPlugin" class="org.apache.activemq.shiro.ShiroPlugin"
                   xmlns="http://www.springframework.org/schema/beans">
                 <!-- This configuration doesn't rely on an INI file for config, and expects that Shiro is configured
                      entirely within Spring.  See the Shiro securityManager bean below. -->
                 <property name="securityManager" ref="securityManager"/>
             </bean>
-
         </plugins>
     </broker>
-
+    <bean id="myRealm" class="org.apache.shiro.realm.text.TextConfigurationRealm">
+        <property name="userDefinitions">
+            <value>
+                system = manager,system
+            </value>
+        </property>
+        <property name="roleDefinitions">
+            <value>
+                system = *
+            </value>
+        </property>
+    </bean>
     <bean id="securityManager" class="org.apache.shiro.mgt.DefaultSecurityManager">
         <!-- Do not use this cache manager in a clustered broker setup.  If your broker is clustered, you should
             configure a cluster-aware CacheManager, e.g. Hazelcast, Terracotta+Ehcache, etc. -->
@@ -56,19 +64,7 @@
         </property>
         <property name="realms">
             <list>
-                <!-- Replace this with the real realm you're going to use that accesses your security data store: -->
-                <bean id="myRealm" class="org.apache.shiro.realm.text.TextConfigurationRealm">
-                    <property name="userDefinitions">
-                        <value>
-                            system = manager,system
-                        </value>
-                    </property>
-                    <property name="roleDefinitions">
-                        <value>
-                            system = *
-                        </value>
-                    </property>
-                </bean>
+                <ref bean="myRealm"/>
                 <!-- Add other realms if necessary -->
             </list>
         </property>

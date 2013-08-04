@@ -18,6 +18,7 @@ package org.apache.activemq.shiro;
 
 import org.apache.activemq.command.ActiveMQDestination;
 import org.apache.activemq.security.SecurityContext;
+import org.apache.activemq.shiro.session.mgt.ConnectionSession;
 import org.apache.shiro.subject.Subject;
 
 import java.security.Principal;
@@ -25,14 +26,15 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * ActiveMQ {@code SecurityContext} implementation that retains a Shiro {@code Subject} instance for use during
- * security checks and other security-related operations.
+ * Shiro-specific {@code SecurityContext} implementation that retains Shiro state for use during security checks and
+ * other security-related operations.
  *
  * @since 5.9.0
  */
 public class SubjectSecurityContext extends SecurityContext {
 
     private final Subject subject;
+    private transient ConnectionSession session; //raw session has a 1:1 correspondence with the connection
 
     public SubjectSecurityContext(SubjectConnectionReference conn) {
         //The username might not be available at the time this object is instantiated (the Subject might be
@@ -44,6 +46,14 @@ public class SubjectSecurityContext extends SecurityContext {
 
     public Subject getSubject() {
         return subject;
+    }
+
+    public void setSession(ConnectionSession session) {
+        this.session = session;
+    }
+
+    public ConnectionSession getSession() {
+        return session;
     }
 
     private static String getUsername(Subject subject) {

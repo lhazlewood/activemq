@@ -42,6 +42,8 @@ public class DefaultConnectionSubjectFactory implements ConnectionSubjectFactory
 
         Subject.Builder builder = new Subject.Builder(conn.getEnvironment().getSecurityManager());
 
+        builder.contextAttribute(org.apache.activemq.shiro.subject.mgt.ConnectionSubjectFactory.CONNECTION_REFERENCE, conn);
+
         authenticationPolicy.customizeSubject(builder, conn);
 
         return builder.buildSubject();

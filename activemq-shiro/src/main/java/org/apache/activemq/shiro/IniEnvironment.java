@@ -16,12 +16,14 @@
  */
 package org.apache.activemq.shiro;
 
+import org.apache.activemq.shiro.mgt.DefaultActiveMqSecurityManager;
 import org.apache.shiro.ShiroException;
 import org.apache.shiro.config.ConfigurationException;
 import org.apache.shiro.config.Ini;
 import org.apache.shiro.config.IniSecurityManagerFactory;
 import org.apache.shiro.env.DefaultEnvironment;
 import org.apache.shiro.io.ResourceUtils;
+import org.apache.shiro.mgt.SecurityManager;
 import org.apache.shiro.realm.Realm;
 import org.apache.shiro.realm.text.IniRealm;
 import org.apache.shiro.util.Initializable;
@@ -114,6 +116,12 @@ public class IniEnvironment extends DefaultEnvironment implements Initializable 
 
     private Map<String, ?> createObjects(Ini ini) {
         IniSecurityManagerFactory factory = new IniSecurityManagerFactory(ini) {
+
+            @Override
+            protected SecurityManager createDefaultInstance() {
+                return new DefaultActiveMqSecurityManager();
+            }
+
             @Override
             protected Realm createRealm(Ini ini) {
                 IniRealm realm = (IniRealm)super.createRealm(ini);
