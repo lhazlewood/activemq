@@ -19,6 +19,7 @@ package org.apache.activemq.shiro;
 import org.apache.activemq.ConfigurationException;
 import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.BrokerPluginSupport;
+import org.apache.activemq.shiro.env.IniEnvironment;
 import org.apache.shiro.config.Ini;
 import org.apache.shiro.env.Environment;
 import org.apache.shiro.mgt.SecurityManager;

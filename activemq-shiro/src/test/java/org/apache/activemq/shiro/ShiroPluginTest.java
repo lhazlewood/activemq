@@ -19,6 +19,7 @@ package org.apache.activemq.shiro;
 import org.apache.activemq.broker.BrokerPlugin;
 import org.apache.activemq.broker.BrokerService;
 import org.apache.activemq.broker.MutableBrokerFilter;
+import org.apache.activemq.shiro.env.IniEnvironment;
 import org.apache.activemq.test.JmsResourceProvider;
 import org.apache.activemq.test.TestSupport;
 import org.apache.shiro.authc.AuthenticationException;
