@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +38,6 @@ import javax.management.openmbean.OpenDataException;
 import javax.management.openmbean.TabularData;
 import javax.management.openmbean.TabularDataSupport;
 import javax.management.openmbean.TabularType;
-
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.broker.jmx.OpenTypeSupport.OpenTypeFactory;
 import org.apache.activemq.broker.region.Destination;
@@ -152,6 +152,28 @@ public class DestinationView implements DestinationViewMBean {
     public long getMinEnqueueTime() {
         return destination.getDestinationStatistics().getProcessTime().getMinTime();
     }
+
+    /**
+     * @return the average size of a message (bytes)
+     */
+    public double getAverageMessageSize() {
+        return destination.getDestinationStatistics().getMessageSize().getAverageSize();
+    }
+
+    /**
+     * @return the max size of a message (bytes)
+     */
+    public long getMaxMessageSize() {
+        return destination.getDestinationStatistics().getMessageSize().getMaxSize();
+    }
+
+    /**
+     * @return the min size of a message (bytes)
+     */
+    public long getMinMessageSize() {
+        return destination.getDestinationStatistics().getMessageSize().getMinSize();
+    }
+
 
     @Override
     public boolean isPrioritizedMessages() {
@@ -281,6 +303,19 @@ public class DestinationView implements DestinationViewMBean {
         }
 
         return rc;
+    }
+
+    @Override
+    public String sendTextMessageWithProperties(String properties) throws Exception {
+        String[] kvs = properties.split(",");
+        Map<String, String> props = new HashMap<String, String>();
+        for (String kv : kvs) {
+            String[] it = kv.split("=");
+            if (it.length == 2) {
+                props.put(it[0],it[1]);
+            }
+        }
+        return sendTextMessage(props, props.remove("body"), props.remove("username"), props.remove("password"));
     }
 
     @Override
@@ -484,6 +519,21 @@ public class DestinationView implements DestinationViewMBean {
     @Override
     public boolean isDLQ() {
         return destination.isDLQ();
+    }
+
+    @Override
+    public long getBlockedSends() {
+        return destination.getDestinationStatistics().getBlockedSends().getCount();
+    }
+
+    @Override
+    public double getAverageBlockedTime() {
+        return destination.getDestinationStatistics().getBlockedTime().getAverageTime();
+    }
+
+    @Override
+    public long getTotalBlockedTime() {
+        return destination.getDestinationStatistics().getBlockedTime().getTotalTime();
     }
 
 }

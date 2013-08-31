@@ -240,7 +240,7 @@ public abstract class MessageDatabase extends ServiceSupport implements BrokerSe
     private boolean ignoreMissingJournalfiles = false;
     private int indexCacheSize = 10000;
     private boolean checkForCorruptJournalFiles = false;
-    private boolean checksumJournalFiles = false;
+    private boolean checksumJournalFiles = true;
     protected boolean forceRecoverIndex = false;
     private final Object checkpointThreadLock = new Object();
     private boolean rewriteOnRedelivery = false;
@@ -1014,6 +1014,14 @@ public abstract class MessageDatabase extends ServiceSupport implements BrokerSe
      */
     void process(JournalCommand<?> data, final Location location, final Location inDoubtlocation) throws IOException {
         if (inDoubtlocation != null && location.compareTo(inDoubtlocation) >= 0) {
+            if (data instanceof KahaSubscriptionCommand) {
+                KahaSubscriptionCommand kahaSubscriptionCommand = (KahaSubscriptionCommand)data;
+                if (kahaSubscriptionCommand.hasSubscriptionInfo()) {
+                    // needs to be processed via activate and will be replayed on reconnect
+                    LOG.debug("ignoring add sub command during recovery replay:" + data);
+                    return;
+                }
+            }
             process(data, location, (Runnable) null, (Runnable) null);
         } else {
             // just recover producer audit
@@ -1830,31 +1838,34 @@ public abstract class MessageDatabase extends ServiceSupport implements BrokerSe
                     pageFile.tx().execute(new Transaction.Closure<IOException>() {
                         @Override
                         public void execute(Transaction tx) throws IOException {
-                            BTreeIndex<Long, HashSet<String>> oldAckPositions =
-                                new BTreeIndex<Long, HashSet<String>>(pageFile, dataIn.readLong());
-                            oldAckPositions.setKeyMarshaller(LongMarshaller.INSTANCE);
-                            oldAckPositions.setValueMarshaller(HashSetStringMarshaller.INSTANCE);
-                            oldAckPositions.load(tx);
-
                             LinkedHashMap<String, SequenceSet> temp = new LinkedHashMap<String, SequenceSet>();
 
-                            // Do the initial build of the data in memory before writing into the store
-                            // based Ack Positions List to avoid a lot of disk thrashing.
-                            Iterator<Entry<Long, HashSet<String>>> iterator = oldAckPositions.iterator(tx);
-                            while (iterator.hasNext()) {
-                                Entry<Long, HashSet<String>> entry = iterator.next();
+                            if (metadata.version >= 3) {
+                                // migrate
+                                BTreeIndex<Long, HashSet<String>> oldAckPositions =
+                                        new BTreeIndex<Long, HashSet<String>>(pageFile, dataIn.readLong());
+                                oldAckPositions.setKeyMarshaller(LongMarshaller.INSTANCE);
+                                oldAckPositions.setValueMarshaller(HashSetStringMarshaller.INSTANCE);
+                                oldAckPositions.load(tx);
 
-                                for(String subKey : entry.getValue()) {
-                                    SequenceSet pendingAcks = temp.get(subKey);
-                                    if (pendingAcks == null) {
-                                        pendingAcks = new SequenceSet();
-                                        temp.put(subKey, pendingAcks);
+
+                                // Do the initial build of the data in memory before writing into the store
+                                // based Ack Positions List to avoid a lot of disk thrashing.
+                                Iterator<Entry<Long, HashSet<String>>> iterator = oldAckPositions.iterator(tx);
+                                while (iterator.hasNext()) {
+                                    Entry<Long, HashSet<String>> entry = iterator.next();
+
+                                    for(String subKey : entry.getValue()) {
+                                        SequenceSet pendingAcks = temp.get(subKey);
+                                        if (pendingAcks == null) {
+                                            pendingAcks = new SequenceSet();
+                                            temp.put(subKey, pendingAcks);
+                                        }
+
+                                        pendingAcks.add(entry.getKey());
                                     }
-
-                                    pendingAcks.add(entry.getKey());
                                 }
                             }
-
                             // Now move the pending messages to ack data into the store backed
                             // structure.
                             value.ackPositions = new ListIndex<String, SequenceSet>(pageFile, tx.allocate());

@@ -16,6 +16,16 @@
  */
 package org.apache.activemq.usecases;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+import javax.jms.Connection;
+import javax.jms.Message;
+import javax.jms.MessageConsumer;
+import javax.jms.Queue;
+import javax.jms.Session;
+
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.TestSupport;
 import org.apache.activemq.broker.BrokerService;
@@ -25,6 +35,7 @@ import org.apache.activemq.broker.region.policy.PolicyMap;
 import org.apache.activemq.command.ActiveMQQueue;
 import org.apache.activemq.util.ConsumerThread;
 import org.apache.activemq.util.ProducerThread;
+import org.apache.activemq.util.Wait;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -33,11 +44,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.jms.*;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
 
 @RunWith(value = Parameterized.class)
 public class MemoryLimitTest extends TestSupport {
@@ -81,6 +87,7 @@ public class MemoryLimitTest extends TestSupport {
         return broker;
     }
 
+    @Override
     @Before
     public void setUp() throws Exception {
         if (broker == null) {
@@ -90,6 +97,7 @@ public class MemoryLimitTest extends TestSupport {
         broker.waitUntilStarted();
     }
 
+    @Override
     @After
     public void tearDown() throws Exception {
         if (broker != null) {
@@ -120,9 +128,10 @@ public class MemoryLimitTest extends TestSupport {
         Thread.sleep(1000);
 
         // assert we didn't break high watermark (70%) usage
-        Destination dest = broker.getDestination((ActiveMQQueue) queue);
+        final Destination dest = broker.getDestination((ActiveMQQueue) queue);
         LOG.info("Destination usage: " + dest.getMemoryUsage());
-        assertTrue(dest.getMemoryUsage().getPercentUsage() <= 71);
+        int percentUsage = dest.getMemoryUsage().getPercentUsage();
+        assertTrue("Should be less than 70% of limit but was: " + percentUsage, percentUsage <= 71);
         LOG.info("Broker usage: " + broker.getSystemUsage().getMemoryUsage());
         assertTrue(broker.getSystemUsage().getMemoryUsage().getPercentUsage() <= 71);
 
@@ -131,11 +140,16 @@ public class MemoryLimitTest extends TestSupport {
         Message msg = consumer.receive();
         msg.acknowledge();
 
-        Thread.sleep(1000);
         // this should free some space and allow us to get new batch of messages in the memory
         // exceeding the limit
-        LOG.info("Destination usage: " + dest.getMemoryUsage());
-        assertTrue(dest.getMemoryUsage().getPercentUsage() >= 478);
+        assertTrue("Limit is exceeded", Wait.waitFor(new Wait.Condition() {
+            @Override
+            public boolean isSatisified() throws Exception {
+                LOG.info("Destination usage: " + dest.getMemoryUsage());
+                return dest.getMemoryUsage().getPercentUsage() >= 478;
+            }
+        }));
+
         LOG.info("Broker usage: " + broker.getSystemUsage().getMemoryUsage());
         assertTrue(broker.getSystemUsage().getMemoryUsage().getPercentUsage() >= 478);
 
@@ -145,13 +159,10 @@ public class MemoryLimitTest extends TestSupport {
             assertNotNull("Didn't receive message " + i, msg);
             msg.acknowledge();
         }
-
     }
 
     /**
-     *
      * Handy test for manually checking what's going on
-     *
      */
     @Ignore
     @Test(timeout = 120000)
@@ -178,7 +189,6 @@ public class MemoryLimitTest extends TestSupport {
         };
         producer2.setMessageCount(1000);
 
-
         ConsumerThread consumer = new ConsumerThread(sess, sess.createQueue("STORE.1"));
         consumer.setBreakOnNull(false);
         consumer.setMessageCount(1000);
@@ -196,6 +206,5 @@ public class MemoryLimitTest extends TestSupport {
         producer2.join();
 
         assertEquals("consumer got all produced messages", producer.getMessageCount(), consumer.getReceived());
-
     }
 }

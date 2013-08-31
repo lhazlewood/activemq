@@ -56,21 +56,7 @@ import org.apache.activemq.ConfigurationException;
 import org.apache.activemq.Service;
 import org.apache.activemq.advisory.AdvisoryBroker;
 import org.apache.activemq.broker.cluster.ConnectionSplitBroker;
-import org.apache.activemq.broker.jmx.AnnotatedMBean;
-import org.apache.activemq.broker.jmx.BrokerMBeanSupport;
-import org.apache.activemq.broker.jmx.BrokerView;
-import org.apache.activemq.broker.jmx.ConnectorView;
-import org.apache.activemq.broker.jmx.ConnectorViewMBean;
-import org.apache.activemq.broker.jmx.HealthView;
-import org.apache.activemq.broker.jmx.HealthViewMBean;
-import org.apache.activemq.broker.jmx.JmsConnectorView;
-import org.apache.activemq.broker.jmx.JobSchedulerView;
-import org.apache.activemq.broker.jmx.JobSchedulerViewMBean;
-import org.apache.activemq.broker.jmx.ManagedRegionBroker;
-import org.apache.activemq.broker.jmx.ManagementContext;
-import org.apache.activemq.broker.jmx.NetworkConnectorView;
-import org.apache.activemq.broker.jmx.NetworkConnectorViewMBean;
-import org.apache.activemq.broker.jmx.ProxyConnectorView;
+import org.apache.activemq.broker.jmx.*;
 import org.apache.activemq.broker.region.CompositeDestinationInterceptor;
 import org.apache.activemq.broker.region.Destination;
 import org.apache.activemq.broker.region.DestinationFactory;
@@ -87,6 +73,7 @@ import org.apache.activemq.broker.scheduler.SchedulerBroker;
 import org.apache.activemq.command.ActiveMQDestination;
 import org.apache.activemq.command.ActiveMQQueue;
 import org.apache.activemq.command.BrokerId;
+import org.apache.activemq.command.ProducerInfo;
 import org.apache.activemq.filter.DestinationFilter;
 import org.apache.activemq.network.ConnectionFilter;
 import org.apache.activemq.network.DiscoveryNetworkConnector;
@@ -107,25 +94,15 @@ import org.apache.activemq.transport.TransportFactorySupport;
 import org.apache.activemq.transport.TransportServer;
 import org.apache.activemq.transport.vm.VMTransportFactory;
 import org.apache.activemq.usage.SystemUsage;
-import org.apache.activemq.util.BrokerSupport;
-import org.apache.activemq.util.DefaultIOExceptionHandler;
-import org.apache.activemq.util.IOExceptionHandler;
-import org.apache.activemq.util.IOExceptionSupport;
-import org.apache.activemq.util.IOHelper;
-import org.apache.activemq.util.InetAddressUtil;
-import org.apache.activemq.util.ServiceStopper;
-import org.apache.activemq.util.ThreadPoolUtils;
-import org.apache.activemq.util.TimeUtils;
-import org.apache.activemq.util.URISupport;
+import org.apache.activemq.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 /**
- * Manages the lifecycle of an ActiveMQ Broker. A BrokerService consists of a
+ * Manages the life-cycle of an ActiveMQ Broker. A BrokerService consists of a
  * number of transport connectors, network connectors and a bunch of properties
  * which can be used to configure the broker as its lazily created.
- *
  *
  * @org.apache.xbean.XBean
  */
@@ -137,7 +114,10 @@ public class BrokerService implements Service {
     public static final int DEFAULT_MAX_FILE_LENGTH = 1024 * 1024 * 32;
 
     private static final Logger LOG = LoggerFactory.getLogger(BrokerService.class);
+
+    @SuppressWarnings("unused")
     private static final long serialVersionUID = 7353129142305630237L;
+
     private boolean useJmx = true;
     private boolean enableStatistics = true;
     private boolean persistent = true;
@@ -193,7 +173,7 @@ public class BrokerService implements Service {
     private boolean useMirroredQueues = false;
     private boolean useTempMirroredQueues = true;
     private BrokerId brokerId;
-    private DestinationInterceptor[] destinationInterceptors;
+    private volatile DestinationInterceptor[] destinationInterceptors;
     private ActiveMQDestination[] destinations;
     private PListStore tempDataStore;
     private int persistenceThreadPriority = Thread.MAX_PRIORITY;
@@ -241,6 +221,7 @@ public class BrokerService implements Service {
     private boolean restartRequested = false;
 
     private int storeOpenWireVersion = OpenWireFormat.DEFAULT_VERSION;
+    private String configurationUrl;
 
     static {
 
@@ -520,11 +501,24 @@ public class BrokerService implements Service {
     }
 
     /**
+     * JSR-250 callback wrapper; converts checked exceptions to runtime exceptions
+     *
+     * delegates to autoStart, done to prevent backwards incompatible signature change
+     */
+    @PostConstruct
+    private void postConstruct() {
+        try {
+            autoStart();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    /**
      *
      * @throws Exception
      * @org. apache.xbean.InitMethod
      */
-    @PostConstruct
     public void autoStart() throws Exception {
         if(shouldAutostart()) {
             start();
@@ -687,12 +681,25 @@ public class BrokerService implements Service {
     }
 
     /**
+     * JSR-250 callback wrapper; converts checked exceptions to runtime exceptions
+     *
+     * delegates to stop, done to prevent backwards incompatible signature change
+     */
+    @PreDestroy
+    private void preDestroy () {
+        try {
+            stop();
+        } catch (Exception ex) {
+            throw new RuntimeException();
+        }
+    }
+
+    /**
      *
      * @throws Exception
      * @org.apache .xbean.DestroyMethod
      */
     @Override
-    @PreDestroy
     public void stop() throws Exception {
         if (!stopping.compareAndSet(false, true)) {
             LOG.trace("Broker already stopping/stopped");
@@ -1053,7 +1060,7 @@ public class BrokerService implements Service {
             return systemUsage;
         } catch (IOException e) {
             LOG.error("Cannot create SystemUsage", e);
-            throw new RuntimeException("Fatally failed to create SystemUsage" + e.getMessage());
+            throw new RuntimeException("Fatally failed to create SystemUsage" + e.getMessage(), e);
         }
     }
 
@@ -1267,6 +1274,20 @@ public class BrokerService implements Service {
             }
         }
         return answer;
+    }
+
+    public ProducerBrokerExchange getProducerBrokerExchange(ProducerInfo producerInfo){
+        ProducerBrokerExchange result = null;
+
+        for (TransportConnector connector : transportConnectors) {
+            for (TransportConnection tc: connector.getConnections()){
+                result = tc.getProducerBrokerExchangeIfExists(producerInfo);
+                if (result !=null){
+                    return result;
+                }
+            }
+        }
+        return result;
     }
 
     public String[] getTransportConnectorURIs() {
@@ -1793,7 +1814,31 @@ public class BrokerService implements Service {
     }
 
     public synchronized JobSchedulerStore getJobSchedulerStore() {
-        if (jobSchedulerStore == null && isSchedulerSupport()) {
+
+        // If support is off don't allow any scheduler even is user configured their own.
+        if (!isSchedulerSupport()) {
+            return null;
+        }
+
+        // If the user configured their own we use it even if persistence is disabled since
+        // we don't know anything about their implementation.
+        if (jobSchedulerStore == null) {
+
+            if (!isPersistent()) {
+                return null;
+            }
+
+            try {
+                PersistenceAdapter pa = getPersistenceAdapter();
+                if (pa != null && pa instanceof JobSchedulerStore) {
+                    this.jobSchedulerStore = (JobSchedulerStore) pa;
+                    configureService(jobSchedulerStore);
+                    return this.jobSchedulerStore;
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
             try {
                 String clazz = "org.apache.activemq.store.kahadb.scheduler.JobSchedulerStoreImpl";
                 jobSchedulerStore = (JobSchedulerStore) getClass().getClassLoader().loadClass(clazz).newInstance();
@@ -1804,7 +1849,6 @@ public class BrokerService implements Service {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-
         }
         return jobSchedulerStore;
     }
@@ -1859,7 +1903,8 @@ public class BrokerService implements Service {
         if (memLimit > jvmLimit) {
             LOG.error("Memory Usage for the Broker (" + memLimit / (1024 * 1024) +
                       " mb) is more than the maximum available for the JVM: " +
-                      jvmLimit / (1024 * 1024) + " mb");
+                      jvmLimit / (1024 * 1024) + " mb - resetting to maximum available: " + jvmLimit / (1024 * 1024) + " mb");
+            usage.getMemoryUsage().setLimit(jvmLimit);
         }
 
         if (getPersistenceAdapter() != null) {
@@ -1880,7 +1925,10 @@ public class BrokerService implements Service {
                 if (storeLimit > dirFreeSpace) {
                     LOG.warn("Store limit is " + storeLimit / (1024 * 1024) +
                              " mb, whilst the data directory: " + dir.getAbsolutePath() +
-                             " only has " + dirFreeSpace / (1024 * 1024) + " mb of usable space");
+                             " only has " + dirFreeSpace / (1024 * 1024) +
+                             " mb of usable space - resetting to maximum available disk space:  " +
+                            dirFreeSpace / (1024 * 1024) + " mb");
+                    usage.getStoreUsage().setLimit(dirFreeSpace);
                 }
             }
 
@@ -1896,6 +1944,7 @@ public class BrokerService implements Service {
                           " mb, whilst the max journal file size for the store is: " +
                           maxJournalFileSize / (1024 * 1024) + " mb, " +
                           "the store will not accept any data when used.");
+
             }
         }
 
@@ -1915,7 +1964,9 @@ public class BrokerService implements Service {
             if (storeLimit > dirFreeSpace) {
                 LOG.error("Temporary Store limit is " + storeLimit / (1024 * 1024) +
                           " mb, whilst the temporary data directory: " + tmpDirPath +
-                          " only has " + dirFreeSpace / (1024 * 1024) + " mb of usable space");
+                          " only has " + dirFreeSpace / (1024 * 1024) + " mb of usable space - resetting to maximum available " +
+                        dirFreeSpace / (1024 * 1024) + " mb.");
+                usage.getTempUsage().setLimit(dirFreeSpace);
             }
 
             if (isPersistent()) {
@@ -1955,7 +2006,9 @@ public class BrokerService implements Service {
                 if (schedularLimit > dirFreeSpace) {
                     LOG.warn("Job Schedular Store limit is " + schedularLimit / (1024 * 1024) +
                              " mb, whilst the data directory: " + schedulerDir.getAbsolutePath() +
-                             " only has " + dirFreeSpace / (1024 * 1024) + " mb of usable space");
+                             " only has " + dirFreeSpace / (1024 * 1024) + " mb of usable space - resetting to " +
+                            dirFreeSpace / (1024 * 1024) + " mb.");
+                    usage.getJobSchedulerUsage().setLimit(dirFreeSpace);
                 }
             }
         }
@@ -2894,5 +2947,13 @@ public class BrokerService implements Service {
 
     public void setStoreOpenWireVersion(int storeOpenWireVersion) {
         this.storeOpenWireVersion = storeOpenWireVersion;
+    }
+
+    public String getConfigurationUrl() {
+        return configurationUrl;
+    }
+
+    public void setConfigurationUrl(String configurationUrl) {
+        this.configurationUrl = configurationUrl;
     }
 }

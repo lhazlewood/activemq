@@ -25,7 +25,13 @@ import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.BrokerFilter;
 import org.apache.activemq.broker.ConnectionContext;
 import org.apache.activemq.broker.ProducerBrokerExchange;
-import org.apache.activemq.broker.region.*;
+import org.apache.activemq.broker.region.Destination;
+import org.apache.activemq.broker.region.DurableTopicSubscription;
+import org.apache.activemq.broker.region.MessageReference;
+import org.apache.activemq.broker.region.RegionBroker;
+import org.apache.activemq.broker.region.Subscription;
+import org.apache.activemq.broker.region.TopicRegion;
+import org.apache.activemq.broker.region.TopicSubscription;
 import org.apache.activemq.command.*;
 import org.apache.activemq.security.SecurityContext;
 import org.apache.activemq.state.ProducerState;
@@ -251,8 +257,9 @@ public class AdvisoryBroker extends BrokerFilter {
     @Override
     public void removeSubscription(ConnectionContext context, RemoveSubscriptionInfo info) throws Exception {
         SubscriptionKey key = new SubscriptionKey(context.getClientId(), info.getSubscriptionName());
-
         DurableTopicSubscription sub = ((TopicRegion)((RegionBroker)next).getTopicRegion()).getDurableSubscription(key);
+
+        super.removeSubscription(context, info);
 
         if (sub == null) {
             LOG.warn("We cannot send an advisory message for a durable sub removal when we don't know about the durable sub");
@@ -260,8 +267,6 @@ public class AdvisoryBroker extends BrokerFilter {
         }
 
         ActiveMQDestination dest = sub.getConsumerInfo().getDestination();
-
-        super.removeSubscription(context, info);
 
         // Don't advise advisory topics.
         if (!AdvisorySupport.isAdvisoryTopic(dest)) {
@@ -417,8 +422,8 @@ public class AdvisoryBroker extends BrokerFilter {
 
     @Override
     public boolean sendToDeadLetterQueue(ConnectionContext context, MessageReference messageReference,
-                                         Subscription subscription) {
-        boolean wasDLQd = super.sendToDeadLetterQueue(context, messageReference, subscription);
+                                         Subscription subscription, Throwable poisonCause) {
+        boolean wasDLQd = super.sendToDeadLetterQueue(context, messageReference, subscription, poisonCause);
         if (wasDLQd) {
             try {
                 if(!messageReference.isAdvisory()) {

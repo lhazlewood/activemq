@@ -380,6 +380,7 @@ class LevelDBStore extends LockableServiceSupport with BrokerServiceAware with P
           if( prepared ) {
             store.preparedAcks.remove(ack.getLastMessageId)
           }
+          uow.incrementRedelivery(store.key, ack.getLastMessageId)
         }
       }
     }
@@ -450,18 +451,18 @@ class LevelDBStore extends LockableServiceSupport with BrokerServiceAware with P
   def rollback(txid: TransactionId) = {
     transactions.remove(txid) match {
       case null =>
-        println("The transaction does not exist")
+        debug("on rollback, the transaction " + txid + " does not exist")
       case tx =>
-        if( tx.prepared ) {
-          val done = new CountDownLatch(1)
-          withUow { uow =>
-            for( action <- tx.commitActions.reverse ) {
-              action.rollback(uow)
-            }
-            uow.syncFlag = true
-            uow.addCompleteListener { done.countDown() }
+        val done = new CountDownLatch(1)
+        withUow { uow =>
+          for( action <- tx.commitActions.reverse ) {
+            action.rollback(uow)
           }
-          done.await()
+          uow.syncFlag = true
+          uow.addCompleteListener { done.countDown() }
+        }
+        done.await()
+        if( tx.prepared ) {
           db.removeTransactionContainer(tx.xacontainer_id)
         }
     }
@@ -470,7 +471,7 @@ class LevelDBStore extends LockableServiceSupport with BrokerServiceAware with P
   def prepare(tx: TransactionId) = {
     transactions.get(tx) match {
       case null =>
-        println("The transaction does not exist")
+        warn("on prepare, the transaction " + tx + " does not exist")
       case tx =>
         tx.prepare
     }
@@ -624,9 +625,12 @@ class LevelDBStore extends LockableServiceSupport with BrokerServiceAware with P
 
     def doAdd(uow: DelayableUOW, message: Message, delay:Boolean): CountDownFuture[AnyRef] = {
       val seq = lastSeq.incrementAndGet()
+      message.incrementReferenceCount()
+      uow.addCompleteListener({
+        message.decrementReferenceCount()
+      })
       uow.enqueue(key, seq, message, delay)
     }
-
 
     override def asyncAddQueueMessage(context: ConnectionContext, message: Message) = asyncAddQueueMessage(context, message, false)
     override def asyncAddQueueMessage(context: ConnectionContext, message: Message, delay: Boolean): Future[AnyRef] = {
@@ -698,7 +702,7 @@ class LevelDBStore extends LockableServiceSupport with BrokerServiceAware with P
     }
 
     override def setBatch(id: MessageId): Unit = {
-      cursorPosition = db.queuePosition(id)
+      cursorPosition = db.queuePosition(id) + 1
     }
 
   }
@@ -717,7 +721,6 @@ class LevelDBStore extends LockableServiceSupport with BrokerServiceAware with P
         db.removeSubscription(sub)
     }
   }
-
 
   def getTopicGCPositions = {
     import collection.JavaConversions._

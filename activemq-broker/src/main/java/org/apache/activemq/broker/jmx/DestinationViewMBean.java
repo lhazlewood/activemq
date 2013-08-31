@@ -148,6 +148,17 @@ public interface DestinationViewMBean {
     String sendTextMessage(@MBeanInfo("body") String body) throws Exception;
 
     /**
+     * Sends a TextMessage to the destination.
+     *
+     * @param properties the message properties to set as a comma sep name=value list. Can only
+     *                contain Strings maped to primitive types or JMS properties. eg: body=hi,JMSReplyTo=Queue2
+     * @return the message id of the message sent.
+     * @throws Exception
+     */
+    @MBeanInfo("Sends a TextMessage to the destination.")
+    public String sendTextMessageWithProperties(String properties) throws Exception;
+
+    /**
      * Sends a TextMesage to the destination.
      *
      * @param headers the message headers and properties to set. Can only
@@ -243,11 +254,18 @@ public interface DestinationViewMBean {
     @MBeanInfo("The shortest time a message has been held this destination.")
     long getMinEnqueueTime();
 
-    /**
-     * @return average time a message is held by a destination
-     */
+
     @MBeanInfo("Average time a message has been held this destination.")
     double getAverageEnqueueTime();
+
+    @MBeanInfo("Average message size on this destination")
+    double getAverageMessageSize();
+
+    @MBeanInfo("Max message size on this destination")
+    public long getMaxMessageSize();
+
+    @MBeanInfo("Min message size on this destination")
+    public long getMinMessageSize();
 
     /**
      * @return the producerFlowControl
@@ -370,5 +388,14 @@ public interface DestinationViewMBean {
      */
     @MBeanInfo("Dead Letter Queue")
     boolean isDLQ();
+
+    @MBeanInfo("Get number of messages blocked for Flow Control")
+    long getBlockedSends();
+
+    @MBeanInfo("get the average time (ms) a message is blocked for Flow Control")
+    double getAverageBlockedTime();
+
+    @MBeanInfo("Get the total time (ms) messages are blocked for Flow Control")
+    long getTotalBlockedTime();
 
 }

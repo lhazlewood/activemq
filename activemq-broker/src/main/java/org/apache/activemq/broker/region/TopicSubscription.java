@@ -261,6 +261,8 @@ public class TopicSubscription extends AbstractSubscription {
 
     @Override
     public synchronized void acknowledge(final ConnectionContext context, final MessageAck ack) throws Exception {
+        super.acknowledge(context, ack);
+
         // Handle the standard acknowledgment case.
         if (ack.isStandardAck() || ack.isPoisonAck() || ack.isIndividualAck()) {
             if (context.isInTransaction()) {
@@ -628,7 +630,7 @@ public class TopicSubscription extends AbstractSubscription {
         if (dest != null) {
             dest.messageDiscarded(getContext(), this, message);
         }
-        broker.getRoot().sendToDeadLetterQueue(getContext(), message, this);
+        broker.getRoot().sendToDeadLetterQueue(getContext(), message, this, new Throwable("TopicSubDiscard. ID:" + info.getConsumerId()));
     }
 
     @Override

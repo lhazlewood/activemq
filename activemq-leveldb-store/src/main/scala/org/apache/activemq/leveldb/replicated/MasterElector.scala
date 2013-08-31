@@ -11,6 +11,9 @@ class LevelDBNodeState extends NodeState {
   var id: String = _
 
   @JsonProperty
+  var container: String = _
+
+  @JsonProperty
   var address: String = _
 
   @JsonProperty
@@ -23,6 +26,7 @@ class LevelDBNodeState extends NodeState {
     obj match {
       case x:LevelDBNodeState =>
         x.id == id &&
+        x.container == container &&
         x.address == address &&
         x.position == position &&
         x.elected == elected
@@ -73,6 +77,8 @@ class MasterElector(store: ElectingLevelDBStore) extends ClusteredSingleton[Leve
     rc.elected = elected
     rc.position = position
     rc.address = address
+    rc.container = store.container
+    rc.address = address
     rc
   }
 
@@ -90,6 +96,10 @@ class MasterElector(store: ElectingLevelDBStore) extends ClusteredSingleton[Leve
             info("Not enough cluster members connected to elect a new master.")
           case Some(members) =>
 
+            if (members.size > store.replicas) {
+              warn("Too many cluster members are connected.  Expected at most "+store.replicas+
+                      " members but there are "+members.size+" connected.")
+            }
             if (members.size < store.clusterSizeQuorum) {
               info("Not enough cluster members connected to elect a master.")
               elected = null

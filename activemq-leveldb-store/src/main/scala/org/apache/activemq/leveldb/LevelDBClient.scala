@@ -40,6 +40,7 @@ import java.util.{Date, Collections}
 import org.apache.activemq.leveldb.util.TimeMetric
 import org.apache.activemq.leveldb.RecordLog.LogInfo
 import org.fusesource.leveldbjni.internal.JniDB
+import org.apache.activemq.ActiveMQMessageAuditNoSync
 
 /**
  * @author <a href="http://hiramchirino.com">Hiram Chirino</a>
@@ -66,6 +67,7 @@ object LevelDBClient extends Log {
   final val DIRTY_INDEX_KEY = bytes(":dirty")
   final val LOG_REF_INDEX_KEY = bytes(":log-refs")
   final val LOGS_INDEX_KEY = bytes(":logs")
+  final val PRODUCER_IDS_INDEX_KEY = bytes(":producer_ids")
 
   final val COLLECTION_META_KEY = bytes(":collection-meta")
   final val TRUE = bytes("true")
@@ -83,6 +85,7 @@ object LevelDBClient extends Log {
   final val LOG_REMOVE_ENTRY        = 4.toByte
   final val LOG_DATA                = 5.toByte
   final val LOG_TRACE               = 6.toByte
+  final val LOG_UPDATE_ENTRY        = 7.toByte
 
   final val LOG_SUFFIX  = ".log"
   final val INDEX_SUFFIX  = ".index"
@@ -699,6 +702,10 @@ class LevelDBClient(store: LevelDBStore) {
             log.read(pos).map {
               case (kind, data, nextPos) =>
                 kind match {
+                  case LOG_DATA =>
+                    val message = decodeMessage(data)
+                    store.db.producerSequenceIdTracker.isDuplicate(message.getMessageId)
+
                   case LOG_ADD_COLLECTION =>
                     val record= decodeCollectionRecord(data)
                     index.put(encodeLongKey(COLLECTION_PREFIX, record.getKey), data)
@@ -721,7 +728,7 @@ class LevelDBClient(store: LevelDBStore) {
                     index.delete(data)
                     collectionMeta.remove(record.getKey)
 
-                  case LOG_ADD_ENTRY =>
+                  case LOG_ADD_ENTRY | LOG_UPDATE_ENTRY =>
                     val record = decodeEntryRecord(data)
 
                     val index_record = new EntryRecord.Bean()
@@ -731,10 +738,12 @@ class LevelDBClient(store: LevelDBStore) {
 
                     index.put(encodeEntryKey(ENTRY_PREFIX, record.getCollectionKey, record.getEntryKey), index_value)
 
-                    if ( record.hasValueLocation ) {
-                      logRefIncrement(record.getValueLocation)
+                    if( kind==LOG_ADD_ENTRY ) {
+                      if ( record.hasValueLocation ) {
+                        logRefIncrement(record.getValueLocation)
+                      }
+                      collectionIncrementSize(record.getCollectionKey, record.getEntryKey.toByteArray)
                     }
-                    collectionIncrementSize(record.getCollectionKey, record.getEntryKey.toByteArray)
 
                   case LOG_REMOVE_ENTRY =>
                     val record = decodeEntryRecord(data)
@@ -846,10 +855,19 @@ class LevelDBClient(store: LevelDBStore) {
         case e => throw e
       }
     }
+    def storeObject(key:Array[Byte], o:Object) = {
+      val baos = new ByteArrayOutputStream()
+      val os = new ObjectOutputStream(baos);
+      os.writeObject(o)
+      os.close()
+      index.put(key, baos.toByteArray)
+    }
 
     storeMap(LOG_REF_INDEX_KEY, logRefs)
     storeMap(COLLECTION_META_KEY, collectionMeta)
     storeList(LOGS_INDEX_KEY, log.log_file_positions)
+    storeObject(PRODUCER_IDS_INDEX_KEY, store.db.producerSequenceIdTracker)
+
   }
 
   private def loadCounters = {
@@ -878,6 +896,13 @@ class LevelDBClient(store: LevelDBStore) {
         rc
       }
     }
+    def loadObject(key:Array[Byte]) = {
+      index.get(key, new ReadOptions).map { value=>
+        val bais = new ByteArrayInputStream(value)
+        val is = new ObjectInputStream(bais);
+        is.readObject();
+      }
+    }
 
     loadMap(LOG_REF_INDEX_KEY, logRefs)
     loadMap(COLLECTION_META_KEY, collectionMeta)
@@ -886,6 +911,9 @@ class LevelDBClient(store: LevelDBStore) {
       for( k <- list ) {
         recoveryLogs.put(k, null)
       }
+    }
+    for( audit <- loadObject(PRODUCER_IDS_INDEX_KEY) ) {
+      store.db.producerSequenceIdTracker = audit.asInstanceOf[ActiveMQMessageAuditNoSync]
     }
   }
 
@@ -1125,6 +1153,33 @@ class LevelDBClient(store: LevelDBStore) {
     }
   }
 
+  def decodeQueueEntryMeta(value:EntryRecord.Getter):Int= {
+    if( value.hasMeta ) {
+      val is = new DataByteArrayInputStream(value.getMeta);
+      val metaVersion = is.readVarInt()
+      metaVersion match {
+        case 1 =>
+          return is.readVarInt()
+        case _ =>
+      }
+    }
+    return 0
+  }
+
+  def getDeliveryCounter(collectionKey: Long, seq:Long):Int = {
+    val ro = new ReadOptions
+    ro.fillCache(true)
+    ro.verifyChecksums(verifyChecksums)
+    val key = encodeEntryKey(ENTRY_PREFIX, collectionKey, encodeLong(seq))
+    var rc = 0
+    might_fail_using_index {
+      for( v <- index.get(key, ro) ) {
+        rc = decodeQueueEntryMeta(EntryRecord.FACTORY.parseUnframed(v))
+      }
+    }
+    return rc
+  }
+
   def queueCursor(collectionKey: Long, seq:Long)(func: (Message)=>Boolean) = {
     collectionCursor(collectionKey, encodeLong(seq)) { (key, value) =>
       val seq = decodeLong(key)
@@ -1132,6 +1187,7 @@ class LevelDBClient(store: LevelDBStore) {
       val msg = getMessage(locator)
       msg.getMessageId().setEntryLocator(EntryLocator(collectionKey, seq))
       msg.getMessageId().setDataLocator(locator)
+      msg.setRedeliveryCounter(decodeQueueEntryMeta(value))
       func(msg)
     }
   }
@@ -1183,16 +1239,17 @@ class LevelDBClient(store: LevelDBStore) {
     }
 
     // Lets decode
-    buffer.map{ x =>
-      var data = if( store.snappyCompressLogs ) {
-        Snappy.uncompress(x)
-      } else {
-        x
-      }
-      store.wireFormat.unmarshal(new ByteSequence(data.data, data.offset, data.length)).asInstanceOf[Message]
-    }.getOrElse(null)
+    buffer.map(decodeMessage(_)).getOrElse(null)
   }
 
+  def decodeMessage(x: Buffer): Message = {
+    var data = if (store.snappyCompressLogs) {
+      Snappy.uncompress(x)
+    } else {
+      x
+    }
+    store.wireFormat.unmarshal(new ByteSequence(data.data, data.offset, data.length)).asInstanceOf[Message]
+  }
 
   def collectionCursor(collectionKey: Long, cursorPosition:Buffer)(func: (Buffer, EntryRecord.Buffer)=>Boolean) = {
     val ro = new ReadOptions
@@ -1267,6 +1324,7 @@ class LevelDBClient(store: LevelDBStore) {
         var dataLocator: DataLocator = null
 
         if (messageRecord != null && messageRecord.locator == null) {
+          store.db.producerSequenceIdTracker.isDuplicate(messageRecord.id)
           val start = System.nanoTime()
           val p = appender.append(LOG_DATA, messageRecord.data)
           log_info = p._2
@@ -1324,21 +1382,32 @@ class LevelDBClient(store: LevelDBStore) {
           log_record.setEntryKey(new Buffer(key, 9, 8))
           log_record.setValueLocation(dataLocator.pos)
           log_record.setValueLength(dataLocator.len)
-          appender.append(LOG_ADD_ENTRY, encodeEntryRecord(log_record.freeze()))
+
+          val kind = if (entry.deliveries==0) LOG_ADD_ENTRY else LOG_UPDATE_ENTRY
+          appender.append(kind, encodeEntryRecord(log_record.freeze()))
 
           val index_record = new EntryRecord.Bean()
           index_record.setValueLocation(dataLocator.pos)
           index_record.setValueLength(dataLocator.len)
-          batch.put(key, encodeEntryRecord(index_record.freeze()).toByteArray)
+
+          // Store the delivery counter.
+          if( entry.deliveries!=0 ) {
+            val os = new DataByteArrayOutputStream()
+            os.writeVarInt(1) // meta data format version
+            os.writeVarInt(entry.deliveries)
+            index_record.setMeta(os.toBuffer)
+          }
 
           val index_data = encodeEntryRecord(index_record.freeze()).toByteArray
           batch.put(key, index_data)
 
-          for (key <- logRefKey(dataLocator.pos, log_info)) {
-            logRefs.getOrElseUpdate(key, new LongCounter()).incrementAndGet()
+          if( kind==LOG_ADD_ENTRY ) {
+            for (key <- logRefKey(dataLocator.pos, log_info)) {
+              logRefs.getOrElseUpdate(key, new LongCounter()).incrementAndGet()
+            }
+            collectionIncrementSize(entry.queueKey, log_record.getEntryKey.toByteArray)
           }
 
-          collectionIncrementSize(entry.queueKey, log_record.getEntryKey.toByteArray)
           write_enqueue_total += System.nanoTime() - start
         }
 

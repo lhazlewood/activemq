@@ -41,7 +41,7 @@ case class DataLocator(pos:Long, len:Int)
 case class MessageRecord(id:MessageId, data:Buffer, syncNeeded:Boolean) {
   var locator:DataLocator = _
 }
-case class QueueEntryRecord(id:MessageId, queueKey:Long, queueSeq:Long)
+case class QueueEntryRecord(id:MessageId, queueKey:Long, queueSeq:Long, deliveries:Int=0)
 case class QueueRecord(id:ActiveMQDestination, queue_key:Long)
 case class QueueEntryRange()
 case class SubAckRecord(subKey:Long, ackPosition:Long)
@@ -308,6 +308,26 @@ class DelayableUOW(val manager:DBManager) extends BaseRetained {
     countDownFuture
   }
 
+  def incrementRedelivery(expectedQueueKey:Long, id:MessageId) = {
+    if( id.getEntryLocator != null ) {
+      val EntryLocator(queueKey, queueSeq) = id.getEntryLocator.asInstanceOf[EntryLocator];
+      assert(queueKey == expectedQueueKey)
+      val counter = manager.client.getDeliveryCounter(queueKey, queueSeq)
+      val entry = QueueEntryRecord(id, queueKey, queueSeq, counter+1)
+      val a = this.synchronized {
+        val action = getAction(entry.id)
+        action.enqueues += entry
+        delayableActions += 1
+        action
+      }
+      manager.dispatchQueue {
+        manager.cancelable_enqueue_actions.put(key(entry), a)
+        a.addToPendingStore()
+      }
+    }
+    countDownFuture
+  }
+
   def dequeue(expectedQueueKey:Long, id:MessageId) = {
     if( id.getEntryLocator != null ) {
       val EntryLocator(queueKey, queueSeq) = id.getEntryLocator.asInstanceOf[EntryLocator];
@@ -427,7 +447,7 @@ class DBManager(val parent:LevelDBStore) {
 
   val lastUowId = new AtomicInteger(1)
 
-  val producerSequenceIdTracker = new ActiveMQMessageAuditNoSync
+  var producerSequenceIdTracker = new ActiveMQMessageAuditNoSync
 
   def getLastProducerSequenceId(id: ProducerId): Long = dispatchQueue.sync {
     producerSequenceIdTracker.getLastSeqId(id)
@@ -437,13 +457,6 @@ class DBManager(val parent:LevelDBStore) {
     dispatchQueue.assertExecuting()
     uowClosedCounter += 1
 
-    // track the producer seq positions.
-    for( (_, action) <- uow.actions ) {
-      if( action.messageRecord!=null ) {
-        producerSequenceIdTracker.isDuplicate(action.messageRecord.id)
-      }
-    }
-
     // Broker could issue a flush_message call before
     // this stage runs.. which make the stage jump over UowDelayed
     if( uow.state.stage < UowDelayed.stage ) {
@@ -451,10 +464,6 @@ class DBManager(val parent:LevelDBStore) {
     }
     if( uow.state.stage < UowFlushing.stage ) {
       uow.actions.foreach { case (id, action) =>
-
-        if( action.messageRecord!=null ) {
-          producerSequenceIdTracker.isDuplicate(action.messageRecord.id)
-        }
 
         // The UoW may have been canceled.
         if( action.messageRecord!=null && action.enqueues.isEmpty ) {
