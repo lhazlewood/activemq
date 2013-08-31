@@ -16,7 +16,6 @@
  */
 package org.apache.activemq.shiro.env;
 
-import org.apache.activemq.shiro.env.IniEnvironment;
 import org.apache.shiro.authc.UsernamePasswordToken;
 import org.apache.shiro.config.ConfigurationException;
 import org.apache.shiro.config.Ini;

@@ -7,7 +7,7 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 /**
- * @since 0.8
+ * @since 5.9.0
  */
 public class DisabledSessionManagerTest {
 

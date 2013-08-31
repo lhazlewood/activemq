@@ -16,7 +16,7 @@
  */
 package org.apache.activemq.shiro.env;
 
-import org.apache.activemq.shiro.ActiveMQPermissionResolver;
+import org.apache.activemq.shiro.authz.ActiveMQPermissionResolver;
 import org.apache.activemq.shiro.mgt.DefaultActiveMqSecurityManager;
 import org.apache.shiro.ShiroException;
 import org.apache.shiro.config.ConfigurationException;
@@ -24,7 +24,6 @@ import org.apache.shiro.config.Ini;
 import org.apache.shiro.config.IniSecurityManagerFactory;
 import org.apache.shiro.env.DefaultEnvironment;
 import org.apache.shiro.io.ResourceUtils;
-import org.apache.shiro.mgt.*;
 import org.apache.shiro.mgt.SecurityManager;
 import org.apache.shiro.realm.Realm;
 import org.apache.shiro.realm.text.IniRealm;

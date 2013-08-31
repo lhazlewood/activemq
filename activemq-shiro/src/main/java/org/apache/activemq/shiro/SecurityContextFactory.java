@@ -17,6 +17,7 @@
 package org.apache.activemq.shiro;
 
 import org.apache.activemq.security.SecurityContext;
+import org.apache.activemq.shiro.subject.SubjectConnectionReference;
 import org.apache.shiro.subject.Subject;
 
 /**
@@ -31,7 +32,7 @@ import org.apache.shiro.subject.Subject;
  * {@code connectionContext.}{@link org.apache.activemq.broker.ConnectionContext#getSecurityContext() getSecurityContext()}
  * to ensure it may be used for Shiro-based security checks.
  *
- * @see SubjectSecurityContext
+ * @see org.apache.activemq.shiro.subject.SubjectSecurityContext
  * @since 5.9.0
  */
 public interface SecurityContextFactory {
@@ -49,7 +50,7 @@ public interface SecurityContextFactory {
      *
      * @param ref the client's connection and subject
      * @return a new {@link SecurityContext} retaining the client connection's {@link Subject} instance.
-     * @see SubjectSecurityContext
+     * @see org.apache.activemq.shiro.subject.SubjectSecurityContext
      */
     SecurityContext createSecurityContext(SubjectConnectionReference ref);
 }

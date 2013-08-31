@@ -17,11 +17,13 @@
 package org.apache.activemq.shiro;
 
 import org.apache.activemq.security.SecurityContext;
+import org.apache.activemq.shiro.subject.SubjectConnectionReference;
+import org.apache.activemq.shiro.subject.SubjectSecurityContext;
 import org.apache.shiro.env.Environment;
 
 /**
  * Default {@code SecurityContextFactory} implementation that creates
- * {@link SubjectSecurityContext} instances, allowing the connection's {@code Subject} and the Shiro
+ * {@link org.apache.activemq.shiro.subject.SubjectSecurityContext} instances, allowing the connection's {@code Subject} and the Shiro
  * {@link Environment} to be available to downstream security broker filters.
  *
  * @since 5.9.0
@@ -29,11 +31,11 @@ import org.apache.shiro.env.Environment;
 public class DefaultSecurityContextFactory implements SecurityContextFactory {
 
     /**
-     * Returns a new {@link SubjectSecurityContext} instance, allowing the connection's {@code Subject} and the Shiro
+     * Returns a new {@link org.apache.activemq.shiro.subject.SubjectSecurityContext} instance, allowing the connection's {@code Subject} and the Shiro
      * {@link Environment} to be available to downstream security broker filters.
      *
      * @param conn the subject's connection
-     * @return a new {@link SubjectSecurityContext} instance, allowing the connection's {@code Subject} and the Shiro
+     * @return a new {@link org.apache.activemq.shiro.subject.SubjectSecurityContext} instance, allowing the connection's {@code Subject} and the Shiro
      *         {@link Environment} to be available to downstream security broker filters.
      */
     @Override

@@ -22,7 +22,7 @@ import org.apache.shiro.mgt.DefaultSessionStorageEvaluator;
 import org.apache.shiro.mgt.DefaultSubjectDAO;
 
 /**
- * @since 0.8
+ * @since 5.9.0
  */
 public class DefaultActiveMqSecurityManager extends DefaultSecurityManager {
 
